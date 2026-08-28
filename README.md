@@ -82,6 +82,24 @@ data/jobs/<job-id>/
 H3 gatewayにはジョブ途中キャンセルAPIがないため、キャンセル要求は現在のH3シーン終了後、
 次のシーンへ進む前に確定します。
 
+## MiniMax-H3参照元
+
+- 公式ソースコード・ドキュメント: [MiniMax-AI/MiniMax-H3](https://github.com/MiniMax-AI/MiniMax-H3)
+- 公式モデルカード・モデル重み: [MiniMaxAI/MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3)
+- 公式プロンプト記述ガイド: [MiniMax-H3 Prompt Writing Skills](https://github.com/MiniMax-AI/MiniMax-H3/tree/main/skills)
+
+本リポジトリにMiniMax-H3のモデル重みは含まれません。利用時は公式モデルカード、
+ライセンス、利用条件を確認してください。
+
+## ライセンス
+
+本リポジトリのソースコードは[Apache License 2.0](LICENSE)で提供します。
+
+このライセンスは本リポジトリのソースコードにのみ適用されます。MiniMax-H3のモデル重みは
+[MiniMax H3 Community License Agreement](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE)
+に従い、その他のモデル、LoRA、ライブラリなどの依存コンポーネントには各配布元の
+ライセンスが適用されます。
+
 ## テスト
 
 ```bash
