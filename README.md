@@ -24,6 +24,14 @@
   ブレス候補、セクション、ビート、小節を評価して曲全体を動的計画法で分割
 - 最終音声はH3生成音声ではなく入力原曲
 
+## サンプル生成動画
+
+[サンプル動画を再生・ダウンロード（MP4、約39MB）](examples/minimax-h3-lipsync-mv-sample.mp4)
+
+- 再生時間: 90秒
+- 映像: H.264 / 1024×768 / 24fps
+- 音声: AAC
+
 ## セットアップ
 
 Python 3.12、ffmpeg、ffprobe、稼働中のdiffusers-movie-server gateway、
