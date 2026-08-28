@@ -1,0 +1,276 @@
+const state = { image: null, audio: null, job: null, source: null, startedAt: 0 };
+const $ = (id) => document.getElementById(id);
+
+function readableBytes(value) {
+  if (!value) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+  return `${(value / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`;
+}
+
+function setImage(file) {
+  if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+    $("formError").textContent = "PNG、JPEG、WebP画像を選択してください。";
+    return;
+  }
+  state.image = file;
+  $("imagePreview").src = URL.createObjectURL(file);
+  $("imageEmpty").classList.add("hidden");
+  $("imagePreviewWrap").classList.remove("hidden");
+  $("formError").textContent = "";
+  updateGenerateState();
+}
+
+function setAudio(file) {
+  const valid = [".wav", ".mp3", ".flac", ".m4a", ".aac", ".ogg"].some(ext => file?.name.toLowerCase().endsWith(ext));
+  if (!file || !valid) {
+    $("formError").textContent = "対応している楽曲ファイルを選択してください。";
+    return;
+  }
+  state.audio = file;
+  $("audioName").textContent = file.name;
+  $("audioMeta").textContent = readableBytes(file.size);
+  $("audioPreview").src = URL.createObjectURL(file);
+  $("audioEmpty").classList.add("hidden");
+  $("audioPreviewWrap").classList.remove("hidden");
+  $("formError").textContent = "";
+  updateGenerateState();
+}
+
+function updateGenerateState() {
+  $("generateButton").disabled = !(state.image && state.audio) || !!state.job && ["queued", "running"].includes(state.job.status);
+}
+
+function setupDrop(zoneId, inputId, setter) {
+  const zone = $(zoneId);
+  const input = $(inputId);
+  input.addEventListener("change", () => setter(input.files[0]));
+  for (const event of ["dragenter", "dragover"]) zone.addEventListener(event, (e) => {
+    e.preventDefault(); zone.classList.add("dragging");
+  });
+  for (const event of ["dragleave", "drop"]) zone.addEventListener(event, (e) => {
+    e.preventDefault(); zone.classList.remove("dragging");
+  });
+  zone.addEventListener("drop", (e) => setter(e.dataTransfer.files[0]));
+  zone.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") input.click(); });
+}
+
+function formatClock(seconds) {
+  const elapsed = Math.max(0, Math.floor(seconds || 0));
+  return `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
+}
+
+function totalElapsed(job) {
+  if (job.total_elapsed_s) return job.total_elapsed_s;
+  if (job.run_started_at) return Math.max(0, Date.now() / 1000 - job.run_started_at);
+  return state.startedAt ? Math.max(0, (Date.now() - state.startedAt) / 1000) : 0;
+}
+
+function formatDuration(seconds) {
+  const value = Math.max(0, Number(seconds) || 0);
+  if (value < 60) return `${value.toFixed(1)}秒`;
+  const minutes = Math.floor(value / 60);
+  return `${minutes}分 ${(value - minutes * 60).toFixed(1)}秒`;
+}
+
+function renderTimings(job) {
+  const timings = job.timings || [];
+  const sceneTimings = timings.filter((item) => item.kind === "scene");
+  const lines = [];
+  timings.filter((item) => item.kind !== "scene").forEach((item) => {
+    lines.push(`${item.label}  ${formatDuration(item.duration_s)}`);
+    if (item.stage === "generating") {
+      sceneTimings.forEach((scene) => {
+        lines.push(`  └ ${scene.label}  ${formatDuration(scene.duration_s)}`);
+      });
+    }
+  });
+  if (!timings.some((item) => item.stage === "generating" && item.kind !== "scene")) {
+    sceneTimings.forEach((scene) => {
+      lines.push(`  └ ${scene.label}  ${formatDuration(scene.duration_s)}`);
+    });
+  }
+  if (["queued", "running"].includes(job.status) && job.timing_label && job.timing_started_at) {
+    const activeSeconds = Date.now() / 1000 - job.timing_started_at;
+    lines.push(`▶ ${job.timing_label}  ${formatDuration(activeSeconds)}（処理中）`);
+  }
+  if (job.total_elapsed_s) lines.push(`\n合計  ${formatDuration(job.total_elapsed_s)}`);
+  $("generationLog").textContent = lines.length ? lines.join("\n") : "所要時間を計測しています…";
+  $("generationLog").scrollTop = $("generationLog").scrollHeight;
+}
+
+function addScenarioBlock(parent, label, value) {
+  if (!value) return;
+  const block = document.createElement("section");
+  block.className = "scenario-block";
+  const heading = document.createElement("h4");
+  heading.textContent = label;
+  const text = document.createElement("p");
+  text.textContent = value;
+  block.append(heading, text);
+  parent.append(block);
+}
+
+function renderScenario(job) {
+  const scenario = job.scenario || {};
+  const overview = scenario.overview || {};
+  const scenes = Array.isArray(scenario.scenes) ? scenario.scenes : [];
+  const available = Object.keys(overview).length > 0 || scenes.length > 0;
+  $("analysisSections").classList.toggle("hidden", !available);
+  if (!available) return;
+
+  const target = $("scenarioContent");
+  target.replaceChildren();
+  if (overview.title) {
+    const title = document.createElement("h3");
+    title.className = "scenario-title";
+    title.textContent = overview.title;
+    target.append(title);
+  }
+  addScenarioBlock(target, "ビジュアルテーマ", overview.visual_theme);
+  addScenarioBlock(target, "カラー設計", overview.color_script);
+  addScenarioBlock(target, "ストーリー", overview.story_arc);
+
+  if (Array.isArray(overview.continuity_rules) && overview.continuity_rules.length) {
+    const block = document.createElement("section");
+    block.className = "scenario-block";
+    const heading = document.createElement("h4");
+    heading.textContent = "連続性ルール";
+    const list = document.createElement("ul");
+    overview.continuity_rules.forEach((rule) => {
+      const item = document.createElement("li");
+      item.textContent = rule;
+      list.append(item);
+    });
+    block.append(heading, list);
+    target.append(block);
+  }
+
+  if (scenes.length) {
+    const list = document.createElement("ol");
+    list.className = "scenario-scenes";
+    scenes.forEach((scene) => {
+      const timing = (job.scenes || []).find((item) => Number(item.index) === Number(scene.index));
+      const item = document.createElement("li");
+      const heading = document.createElement("strong");
+      const timingText = timing
+        ? ` · 長さ ${Number(timing.duration).toFixed(1)}秒（${Number(timing.start).toFixed(1)}–${Number(timing.end).toFixed(1)}秒）`
+        : "";
+      heading.textContent = `Scene ${scene.index}${timingText}`;
+      const details = [scene.emotion, scene.shot, scene.camera].filter(Boolean).join(" · ");
+      if (details) {
+        const text = document.createElement("span");
+        text.textContent = details;
+        item.append(heading, text);
+      } else {
+        item.append(heading);
+      }
+      list.append(item);
+    });
+    target.append(list);
+  }
+}
+
+function renderJob(job) {
+  state.job = job;
+  $("emptyOutput").classList.add("hidden");
+  $("jobOutput").classList.remove("hidden");
+  const progress = Math.round((job.progress || 0) * 100);
+  $("stageLabel").textContent = job.stage.replaceAll("_", " ");
+  $("statusMessage").textContent = job.message || "処理中";
+  $("progressText").textContent = `${progress}%`;
+  $("progressBar").style.width = `${progress}%`;
+  $("sceneProgress").textContent = job.scene_count ? `シーン ${job.current_scene || 0} / ${job.scene_count}` : "シーンを解析中";
+  $("elapsedTime").textContent = `合計 ${formatClock(totalElapsed(job))}`;
+  renderTimings(job);
+  renderScenario(job);
+  $("jobError").textContent = job.error || "";
+  const active = ["queued", "running"].includes(job.status);
+  $("cancelButton").classList.toggle("hidden", !active);
+  $("retryButton").classList.toggle("hidden", !["failed", "cancelled"].includes(job.status));
+  if (job.status === "completed") {
+    const videoUrl = `/api/jobs/${job.id}/output`;
+    $("resultVideo").src = videoUrl;
+    $("actualVideo").src = videoUrl;
+    $("downloadButton").href = `/api/jobs/${job.id}/download`;
+    $("videoArea").classList.remove("hidden");
+  }
+  updateGenerateState();
+}
+
+function watchJob(jobId) {
+  if (state.source) state.source.close();
+  state.source = new EventSource(`/api/jobs/${jobId}/events`);
+  state.source.onmessage = (event) => {
+    const job = JSON.parse(event.data);
+    renderJob(job);
+    if (["completed", "failed", "cancelled"].includes(job.status)) state.source.close();
+  };
+  state.source.onerror = () => state.source?.close();
+}
+
+async function generate() {
+  $("formError").textContent = "";
+  const body = new FormData();
+  body.append("character", state.image);
+  body.append("song", state.audio);
+  body.append("concept", $("concept").value.trim());
+  $("generateButton").disabled = true;
+  state.startedAt = Date.now();
+  try {
+    const response = await fetch("/api/jobs", { method: "POST", body });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "生成を開始できませんでした");
+    renderJob(data);
+    watchJob(data.id);
+  } catch (error) {
+    $("formError").textContent = error.message;
+    updateGenerateState();
+  }
+}
+
+async function checkHealth() {
+  try {
+    const response = await fetch("/api/health");
+    const data = await response.json();
+    const ready = data.llms?.scenario?.ok;
+    $("healthBadge").textContent = ready ? "LLM ONLINE" : "接続を確認してください";
+    $("healthBadge").classList.toggle("ok", ready);
+  } catch { $("healthBadge").textContent = "OFFLINE"; }
+}
+
+setupDrop("imageDrop", "imageInput", setImage);
+setupDrop("audioDrop", "audioInput", setAudio);
+$("removeImage").addEventListener("click", (e) => {
+  e.preventDefault(); state.image = null; $("imagePreviewWrap").classList.add("hidden"); $("imageEmpty").classList.remove("hidden"); updateGenerateState();
+});
+$("removeAudio").addEventListener("click", (e) => {
+  e.preventDefault(); state.audio = null; $("audioPreview").pause(); $("audioPreviewWrap").classList.add("hidden"); $("audioEmpty").classList.remove("hidden"); updateGenerateState();
+});
+$("generateButton").addEventListener("click", generate);
+$("cancelButton").addEventListener("click", async () => {
+  if (!state.job) return;
+  await fetch(`/api/jobs/${state.job.id}/cancel`, { method: "POST" });
+});
+$("openActual").addEventListener("click", () => $("actualDialog").showModal());
+$("retryButton").addEventListener("click", async () => {
+  if (!state.job) return;
+  state.startedAt = Date.now();
+  const response = await fetch(`/api/jobs/${state.job.id}/retry`, { method: "POST" });
+  const data = await response.json();
+  if (!response.ok) { $("jobError").textContent = data.detail || "再開できませんでした"; return; }
+  renderJob(data); watchJob(data.id);
+});
+$("closeDialog").addEventListener("click", () => $("actualDialog").close());
+$("fitToggle").addEventListener("click", () => {
+  const viewport = $("actualViewport");
+  viewport.classList.toggle("fit");
+  $("fitToggle").textContent = viewport.classList.contains("fit") ? "100%表示" : "画面に合わせる";
+});
+setInterval(() => {
+  if (state.job && ["queued", "running"].includes(state.job.status)) {
+    $("elapsedTime").textContent = `合計 ${formatClock(totalElapsed(state.job))}`;
+    renderTimings(state.job);
+  }
+}, 1000);
+checkHealth();

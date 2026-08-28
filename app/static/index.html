@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Minimax-H3 lipsync MV</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">MINIMAX-H3 · VOCAL LOCK · TURBO</p>
+      <h1>Character to Music Video</h1>
+    </div>
+    <div id="healthBadge" class="health-badge">接続確認中</div>
+  </header>
+
+  <main class="workspace">
+    <section class="panel input-panel">
+      <div class="panel-heading">
+        <span class="step-number">01</span>
+        <div><h2>素材</h2><p>キャラクターと楽曲を追加</p></div>
+      </div>
+
+      <label id="imageDrop" class="drop-zone" tabindex="0">
+        <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+        <div id="imageEmpty" class="drop-empty">
+          <span class="drop-icon">＋</span>
+          <strong>キャラクター画像</strong>
+          <span>PNG / JPEG / WebPをドロップ</span>
+        </div>
+        <div id="imagePreviewWrap" class="image-preview-wrap hidden">
+          <img id="imagePreview" alt="キャラクタープレビュー">
+          <button id="removeImage" class="remove-button" type="button">削除</button>
+        </div>
+      </label>
+
+      <label id="audioDrop" class="drop-zone audio-zone" tabindex="0">
+        <input id="audioInput" type="file" accept="audio/*,.flac,.m4a,.aac,.ogg" hidden>
+        <div id="audioEmpty" class="drop-empty">
+          <span class="wave-icon">≋</span>
+          <strong>楽曲</strong>
+          <span>WAV / MP3 / FLAC / M4Aをドロップ</span>
+        </div>
+        <div id="audioPreviewWrap" class="audio-preview hidden">
+          <div class="file-row">
+            <div><strong id="audioName"></strong><span id="audioMeta"></span></div>
+            <button id="removeAudio" class="remove-button" type="button">削除</button>
+          </div>
+          <audio id="audioPreview" controls></audio>
+        </div>
+      </label>
+
+      <label class="concept-field">
+        <span>MVコンセプト <em>任意</em></span>
+        <textarea id="concept" rows="4" maxlength="1000" placeholder="例：夜明け前の海辺。静かな始まりからサビで光が広がる。"></textarea>
+      </label>
+
+      <div class="fixed-specs">
+        <span>H3 ONLY</span><span>1024 × 768</span><span>24 FPS</span><span>5–10 SEC</span>
+      </div>
+
+      <div class="action-row">
+        <button id="generateButton" class="primary-button" disabled>MVを生成</button>
+        <button id="cancelButton" class="secondary-button hidden">キャンセル</button>
+      </div>
+      <p id="formError" class="form-error" role="alert"></p>
+
+      <div id="analysisSections" class="analysis-sections hidden">
+        <details class="analysis-card" open>
+          <summary>シナリオ</summary>
+          <div id="scenarioContent" class="analysis-content"></div>
+        </details>
+      </div>
+    </section>
+
+    <section class="panel output-panel">
+      <div class="panel-heading">
+        <span class="step-number">02</span>
+        <div><h2>生成結果</h2><p>処理状況と完成映像</p></div>
+      </div>
+
+      <div id="emptyOutput" class="output-empty">
+        <div class="frame-mark"><span></span></div>
+        <strong>ここにMVが表示されます</strong>
+        <p>素材を追加して生成を開始してください。</p>
+      </div>
+
+      <div id="jobOutput" class="hidden">
+        <div class="status-header">
+          <div><span id="stageLabel" class="stage-label">待機中</span><h3 id="statusMessage">準備しています</h3></div>
+          <span id="progressText" class="progress-text">0%</span>
+        </div>
+        <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+        <div class="generation-meta">
+          <span id="sceneProgress">シーン — / —</span>
+          <span id="elapsedTime">00:00</span>
+          <span>H3 TURBO</span>
+        </div>
+
+        <div id="videoArea" class="video-area hidden">
+          <div class="video-open">
+            <video id="resultVideo" controls preload="metadata"></video>
+            <button id="openActual" type="button">クリックで実寸表示</button>
+          </div>
+          <a id="downloadButton" class="download-button" download>MP4をダウンロード</a>
+        </div>
+
+        <details class="log-panel" open>
+          <summary>生成情報・所要時間</summary>
+          <pre id="generationLog"></pre>
+        </details>
+        <p id="jobError" class="job-error"></p>
+        <button id="retryButton" class="secondary-button hidden" type="button">失敗したシーンから再開</button>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="actualDialog" class="actual-dialog">
+    <div class="dialog-toolbar">
+      <strong>1024 × 768 実寸プレビュー</strong>
+      <div>
+        <button id="fitToggle" type="button">画面に合わせる</button>
+        <button id="closeDialog" type="button">閉じる</button>
+      </div>
+    </div>
+    <div id="actualViewport" class="actual-viewport fit">
+      <video id="actualVideo" controls></video>
+    </div>
+  </dialog>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
