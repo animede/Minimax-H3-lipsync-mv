@@ -30,13 +30,17 @@ def _extract_json(text: str) -> Any:
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        starts = [pos for pos in (cleaned.find("{"), cleaned.find("[")) if pos >= 0]
+        # Gemma may put reasoning or a short introduction before the answer. That text can
+        # itself contain '[' or '{', so trying only the first opening character can miss a
+        # perfectly valid JSON value later in the response.
+        starts = [match.start() for match in re.finditer(r"[\[{]", cleaned)]
         if not starts:
             raise LLMError("LLM応答にJSONがありません")
-        start = min(starts)
-        for end in range(len(cleaned), start, -1):
+        decoder = json.JSONDecoder()
+        for start in starts:
             try:
-                return json.loads(cleaned[start:end])
+                value, _ = decoder.raw_decode(cleaned, start)
+                return value
             except json.JSONDecodeError:
                 continue
         raise LLMError("LLM応答のJSONを解析できません")
@@ -84,27 +88,57 @@ def check_models(base_url: str, timeout: float = 8) -> list[str]:
 
 
 def _scenario_request(prompt: str, max_tokens: int = 3000) -> Any:
+    system = (
+        "You are a music-video director and MiniMax-H3 prompt engineer. "
+        "Preserve one character identity and return strictly valid JSON."
+    )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": prompt},
+    ]
     data = chat(
         settings.scenario_llm_url,
         settings.scenario_llm_model,
-        [
-            {
-                "role": "system",
-                "content": (
-                    "You are a music-video director and MiniMax-H3 prompt engineer. "
-                    "Preserve one character identity and return strictly valid JSON."
-                ),
-            },
-            {"role": "user", "content": prompt},
-        ],
+        messages,
         max_tokens=max_tokens,
         temperature=0.35,
         timeout=240,
     )
     try:
-        return _extract_json(str(data["choices"][0]["message"].get("content") or ""))
+        content = str(data["choices"][0]["message"].get("content") or "")
     except (KeyError, IndexError, TypeError) as exc:
         raise LLMError("シナリオLLMの応答形式が不正です") from exc
+    try:
+        return _extract_json(content)
+    except LLMError:
+        # A single corrective turn handles truncated prose, missing delimiters and other
+        # occasional malformed generations without restarting the complete MV job.
+        repair_messages = messages + [
+            {"role": "assistant", "content": content},
+            {
+                "role": "user",
+                "content": (
+                    "Your previous response was not valid JSON. Return the complete answer again "
+                    "as JSON only, with no Markdown fence, commentary, or reasoning. Preserve the "
+                    "exact schema and requested number of scenes."
+                ),
+            },
+        ]
+        repaired = chat(
+            settings.scenario_llm_url,
+            settings.scenario_llm_model,
+            repair_messages,
+            max_tokens=max_tokens,
+            temperature=0.0,
+            timeout=240,
+        )
+        try:
+            repaired_content = str(
+                repaired["choices"][0]["message"].get("content") or ""
+            )
+        except (KeyError, IndexError, TypeError) as exc:
+            raise LLMError("シナリオLLMの再応答形式が不正です") from exc
+        return _extract_json(repaired_content)
 
 
 def analyze_character(image_path: Path) -> dict[str, Any]:
@@ -308,7 +342,12 @@ def generate_scenario(
     for start in range(0, len(scenes), 5):
         batch = scenes[start:start + 5]
         previous = outputs[-1] if outputs else None
-        result = _scenario_request(
+        expected = [int(item["index"]) for item in batch]
+        response_template = [
+            {"index": index, "emotion": "", "shot": "", "camera": "", "prompt": ""}
+            for index in expected
+        ]
+        batch_prompt = (
             "Write one production prompt per fixed scene. Do not add/remove scenes or change times. "
             "Prompts must be English and suitable for MiniMax-H3 ref2va. Keep exactly one character. "
             "Never describe hair color, hairstyle, face, clothing, age or art style differently from "
@@ -321,13 +360,33 @@ def generate_scenario(
             f"TREATMENT: {json.dumps(overview, ensure_ascii=False)}\n"
             f"PREVIOUS: {json.dumps(previous, ensure_ascii=False)}\n"
             f"SCENES: {json.dumps(batch, ensure_ascii=False)}\n"
-            "Return a JSON array with exactly these fields: "
-            '[{"index":1,"emotion":"","shot":"","camera":"","prompt":""}].'
+            f"Return exactly {len(batch)} array items with indexes {expected}. "
+            "Use this exact JSON structure and replace only the empty string values: "
+            f"{json.dumps(response_template, ensure_ascii=False)}"
         )
+        result = _scenario_request(batch_prompt)
+        actual = (
+            [int(item.get("index", -1)) for item in result if isinstance(item, dict)]
+            if isinstance(result, list)
+            else []
+        )
+        if not isinstance(result, list) or len(result) != len(batch) or actual != expected:
+            result = _scenario_request(
+                batch_prompt
+                + "\nCORRECTION: The previous answer had the wrong item count or indexes. "
+                + f"Return exactly {len(batch)} items in this order: {expected}. JSON only."
+            )
+            actual = (
+                [int(item.get("index", -1)) for item in result if isinstance(item, dict)]
+                if isinstance(result, list)
+                else []
+            )
         if not isinstance(result, list) or len(result) != len(batch):
-            raise LLMError(f"シーン{start + 1}以降のプロンプト数が一致しません")
-        expected = [int(item["index"]) for item in batch]
-        actual = [int(item.get("index", -1)) for item in result if isinstance(item, dict)]
+            actual_count = len(result) if isinstance(result, list) else 0
+            raise LLMError(
+                f"シーン{start + 1}以降のプロンプト数が一致しません: "
+                f"expected={len(batch)}, actual={actual_count}"
+            )
         if actual != expected:
             raise LLMError(f"シーン番号が一致しません: expected={expected}, actual={actual}")
         for scene, item in zip(batch, result, strict=True):
