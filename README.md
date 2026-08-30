@@ -1,7 +1,10 @@
 # Minimax-H3-lipsync-mv
 
-1枚のキャラクター参照画像と1本の楽曲から、MiniMax-H3 Ref2VAだけを使って
-リップシンク付きMVを生成するローカルWebアプリケーションです。
+1枚のキャラクター参照画像と楽曲、またはテキスト原稿から、MiniMax-H3 Ref2VAを使って
+リップシンク付きMV／読み上げ動画を生成するローカルWebアプリケーションです。
+
+TXTを入力した場合はAivisSpeech Engineで1文ずつ音声合成し、結合した読み上げ音声を
+Vocal Lockへ直接渡します。映像シナリオは入力原稿の内容を元に作成します。
 
 ## 固定仕様
 
@@ -36,7 +39,8 @@
 ## セットアップ
 
 Python 3.12、ffmpeg、ffprobe、稼働中のdiffusers-movie-server gateway、
-DemucsサービスまたはDemucs入りPython環境が必要です。
+DemucsサービスまたはDemucs入りPython環境が必要です。読み上げ動画には
+AivisSpeech Engine（既定 `http://127.0.0.1:10101`）も必要です。
 
 ```bash
 cd Minimax-H3-lipsync-mv
@@ -56,6 +60,7 @@ cp .env.example .env
 | シナリオ・H3プロンプト | `http://127.0.0.1:64650/v1` |
 | Demucs | `http://127.0.0.1:8889` |
 | H3 gateway | `http://127.0.0.1:8630` |
+| AivisSpeech Engine | `http://127.0.0.1:10101`（まお／ノーマル） |
 
 接続先やモデルIDは `.env` で変更できます。APIキーはログやジョブJSONへ保存しません。
 

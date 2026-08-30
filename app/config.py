@@ -29,6 +29,7 @@ class Settings:
     retention_days: int = int(os.getenv("APP_JOB_RETENTION_DAYS", "7"))
     max_image_bytes: int = 20 * 1024 * 1024
     max_audio_bytes: int = 500 * 1024 * 1024
+    max_text_bytes: int = 2 * 1024 * 1024
 
     jobs_dir: Path = ROOT / "data" / "jobs"
     scenario_llm_url: str = os.getenv(
@@ -44,6 +45,8 @@ class Settings:
     h3_gateway_url: str = os.getenv("H3_GATEWAY_URL", "http://127.0.0.1:8630").rstrip("/")
     h3_preset: str = os.getenv("H3_PRESET", "96gb-int8")
     h3_gpus: str = os.getenv("H3_GPUS", "0")
+    tts_url: str = os.getenv("TTS_URL", "http://127.0.0.1:10101").rstrip("/")
+    tts_speaker_id: int = int(os.getenv("TTS_SPEAKER_ID", "888753760"))
 
     width: int = 1024
     height: int = 768

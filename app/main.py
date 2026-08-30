@@ -16,6 +16,7 @@ from .config import ROOT, settings
 from .job_store import store
 from .pipeline import run_pipeline
 from .services.llm import LLMError, check_models
+from .services.tts import TTSError, check_tts, read_text_file
 
 app = FastAPI(title="Minimax-H3-lipsync-mv", version="0.1.0")
 app.mount("/static", StaticFiles(directory=ROOT / "app" / "static"), name="static")
@@ -23,6 +24,7 @@ executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mv-job")
 
 IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
 AUDIO_SUFFIXES = {".wav", ".mp3", ".flac", ".m4a", ".aac", ".ogg"}
+TEXT_SUFFIXES = {".txt"}
 
 
 def _safe_filename(name: str, fallback: str) -> str:
@@ -50,7 +52,7 @@ def index() -> FileResponse:
 
 @app.get("/api/health")
 def health() -> dict:
-    result = {"ok": True, "h3_gateway": settings.h3_gateway_url, "llms": {}}
+    result = {"ok": True, "h3_gateway": settings.h3_gateway_url, "llms": {}, "tts": {}}
     try:
         result["llms"]["scenario"] = {
             "ok": True,
@@ -58,34 +60,67 @@ def health() -> dict:
         }
     except LLMError as exc:
         result["llms"]["scenario"] = {"ok": False, "error": str(exc)}
+    try:
+        info = check_tts()
+        result["tts"] = {
+            "ok": True,
+            "version": info["version"],
+            "speaker_id": settings.tts_speaker_id,
+        }
+    except TTSError as exc:
+        result["tts"] = {"ok": False, "error": str(exc)}
     return result
 
 
 @app.post("/api/jobs", status_code=202)
 async def create_job(
     character: Annotated[UploadFile, File()],
-    song: Annotated[UploadFile, File()],
+    song: Annotated[UploadFile | None, File()] = None,
+    text: Annotated[UploadFile | None, File()] = None,
     concept: Annotated[str, Form()] = "",
 ) -> dict:
     character_type = (character.content_type or mimetypes.guess_type(character.filename or "")[0] or "")
     if character_type not in IMAGE_TYPES:
         raise HTTPException(415, "キャラクター画像はPNG、JPEG、WebPに対応しています")
-    song_suffix = Path(song.filename or "").suffix.lower()
-    if song_suffix not in AUDIO_SUFFIXES:
-        raise HTTPException(415, "楽曲形式はWAV、MP3、FLAC、M4A、AAC、OGGに対応しています")
+    if (song is None) == (text is None):
+        raise HTTPException(422, "楽曲またはテキストのどちらか一方を指定してください")
     image_name = _safe_filename(character.filename or "character.png", "character")
-    song_name = _safe_filename(song.filename or "song.wav", "song")
-    job = store.create(image_name, song_name, concept)
+    input_mode = "narration" if text is not None else "music"
+    source_text = ""
+    text_name = ""
+    if song is not None:
+        song_suffix = Path(song.filename or "").suffix.lower()
+        if song_suffix not in AUDIO_SUFFIXES:
+            raise HTTPException(415, "楽曲形式はWAV、MP3、FLAC、M4A、AAC、OGGに対応しています")
+        song_name = _safe_filename(song.filename or "song.wav", "song")
+    else:
+        assert text is not None
+        if Path(text.filename or "").suffix.lower() not in TEXT_SUFFIXES:
+            raise HTTPException(415, "読み上げ原稿はTXT形式に対応しています")
+        text_name = _safe_filename(text.filename or "script.txt", "script")
+        song_name = "narration.wav"
+    job = store.create(
+        image_name, song_name, concept, input_mode=input_mode, text_file=text_name
+    )
     input_dir = store.job_dir(job.id) / "input"
     try:
         await _save_upload(character, input_dir / image_name, settings.max_image_bytes)
-        await _save_upload(song, input_dir / song_name, settings.max_audio_bytes)
+        if song is not None:
+            await _save_upload(song, input_dir / song_name, settings.max_audio_bytes)
+        else:
+            assert text is not None
+            await _save_upload(text, input_dir / text_name, settings.max_text_bytes)
+            source_text = read_text_file(input_dir / text_name)
+            store.update(job.id, source_text=source_text)
     except Exception:
         store.update(job.id, status="failed", stage="upload", error="アップロードに失敗しました")
         raise
     finally:
         await character.close()
-        await song.close()
+        if song is not None:
+            await song.close()
+        if text is not None:
+            await text.close()
     executor.submit(run_pipeline, job.id)
     return job.to_dict()
 
@@ -181,5 +216,7 @@ def view_output(job_id: str) -> FileResponse:
 @app.get("/api/jobs/{job_id}/download")
 def download_output(job_id: str) -> FileResponse:
     path, song_name = _output(job_id)
-    filename = f"{Path(song_name).stem}_H3_MV.mp4"
+    job = store.get(job_id)
+    assert job is not None
+    filename = f"{Path(song_name).stem}_H3_{'Talk' if job.input_mode == 'narration' else 'MV'}.mp4"
     return FileResponse(path, media_type="video/mp4", filename=filename)

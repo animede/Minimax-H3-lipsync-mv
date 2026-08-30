@@ -10,7 +10,7 @@
   <header class="app-header">
     <div>
       <p class="eyebrow">MINIMAX-H3 · VOCAL LOCK · TURBO</p>
-      <h1>Character to Music Video</h1>
+      <h1>Character Video Studio</h1>
     </div>
     <div id="healthBadge" class="health-badge">接続確認中</div>
   </header>
@@ -19,7 +19,7 @@
     <section class="panel input-panel">
       <div class="panel-heading">
         <span class="step-number">01</span>
-        <div><h2>素材</h2><p>キャラクターと楽曲を追加</p></div>
+        <div><h2>素材</h2><p>キャラクターと楽曲、または読み上げ原稿を追加</p></div>
       </div>
 
       <label id="imageDrop" class="drop-zone" tabindex="0">
@@ -36,11 +36,11 @@
       </label>
 
       <label id="audioDrop" class="drop-zone audio-zone" tabindex="0">
-        <input id="audioInput" type="file" accept="audio/*,.flac,.m4a,.aac,.ogg" hidden>
+        <input id="audioInput" type="file" accept="audio/*,.flac,.m4a,.aac,.ogg,text/plain,.txt" hidden>
         <div id="audioEmpty" class="drop-empty">
           <span class="wave-icon">≋</span>
-          <strong>楽曲</strong>
-          <span>WAV / MP3 / FLAC / M4Aをドロップ</span>
+          <strong>楽曲 または 読み上げ原稿</strong>
+          <span>音声ファイル / TXTをドロップ</span>
         </div>
         <div id="audioPreviewWrap" class="audio-preview hidden">
           <div class="file-row">
@@ -48,11 +48,12 @@
             <button id="removeAudio" class="remove-button" type="button">削除</button>
           </div>
           <audio id="audioPreview" controls></audio>
+          <pre id="textPreview" class="text-preview hidden"></pre>
         </div>
       </label>
 
       <label class="concept-field">
-        <span>MVコンセプト <em>任意</em></span>
+        <span>映像コンセプト <em>任意</em></span>
         <textarea id="concept" rows="4" maxlength="1000" placeholder="例：夜明け前の海辺。静かな始まりからサビで光が広がる。"></textarea>
       </label>
 
@@ -61,7 +62,7 @@
       </div>
 
       <div class="action-row">
-        <button id="generateButton" class="primary-button" disabled>MVを生成</button>
+        <button id="generateButton" class="primary-button" disabled>動画を生成</button>
         <button id="cancelButton" class="secondary-button hidden">キャンセル</button>
       </div>
       <p id="formError" class="form-error" role="alert"></p>
@@ -82,7 +83,7 @@
 
       <div id="emptyOutput" class="output-empty">
         <div class="frame-mark"><span></span></div>
-        <strong>ここにMVが表示されます</strong>
+        <strong>ここに動画が表示されます</strong>
         <p>素材を追加して生成を開始してください。</p>
       </div>
 

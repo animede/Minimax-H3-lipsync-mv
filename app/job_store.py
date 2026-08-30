@@ -65,7 +65,10 @@ class JobStore:
             total += 24 * 3600
         job.total_elapsed_s = float(total)
 
-    def create(self, character_file: str, song_file: str, concept: str) -> Job:
+    def create(
+        self, character_file: str, song_file: str, concept: str, *,
+        input_mode: str = "music", text_file: str = "", source_text: str = "",
+    ) -> Job:
         now = time.time()
         job = Job(
             id=uuid.uuid4().hex[:16],
@@ -74,6 +77,9 @@ class JobStore:
             character_file=character_file,
             song_file=song_file,
             concept=concept.strip(),
+            input_mode=input_mode,
+            text_file=text_file,
+            source_text=source_text,
         )
         with self._lock:
             self._jobs[job.id] = job

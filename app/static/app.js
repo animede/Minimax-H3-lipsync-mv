@@ -1,4 +1,4 @@
-const state = { image: null, audio: null, job: null, source: null, startedAt: 0 };
+const state = { image: null, sourceFile: null, sourceMode: null, job: null, source: null, startedAt: 0 };
 const $ = (id) => document.getElementById(id);
 
 function readableBytes(value) {
@@ -22,15 +22,26 @@ function setImage(file) {
 }
 
 function setAudio(file) {
-  const valid = [".wav", ".mp3", ".flac", ".m4a", ".aac", ".ogg"].some(ext => file?.name.toLowerCase().endsWith(ext));
+  const lowerName = file?.name.toLowerCase() || "";
+  const isText = lowerName.endsWith(".txt");
+  const valid = isText || [".wav", ".mp3", ".flac", ".m4a", ".aac", ".ogg"].some(ext => lowerName.endsWith(ext));
   if (!file || !valid) {
-    $("formError").textContent = "対応している楽曲ファイルを選択してください。";
+    $("formError").textContent = "対応している音声ファイルまたはTXTを選択してください。";
     return;
   }
-  state.audio = file;
+  state.sourceFile = file;
+  state.sourceMode = isText ? "text" : "song";
   $("audioName").textContent = file.name;
-  $("audioMeta").textContent = readableBytes(file.size);
-  $("audioPreview").src = URL.createObjectURL(file);
+  $("audioMeta").textContent = `${readableBytes(file.size)} · ${isText ? "AivisSpeechで文単位に読み上げ" : "楽曲"}`;
+  $("audioPreview").classList.toggle("hidden", isText);
+  $("textPreview").classList.toggle("hidden", !isText);
+  if (isText) {
+    file.text().then((value) => { $("textPreview").textContent = value.slice(0, 1200); });
+    $("audioPreview").removeAttribute("src");
+  } else {
+    $("audioPreview").src = URL.createObjectURL(file);
+    $("textPreview").textContent = "";
+  }
   $("audioEmpty").classList.add("hidden");
   $("audioPreviewWrap").classList.remove("hidden");
   $("formError").textContent = "";
@@ -38,7 +49,7 @@ function setAudio(file) {
 }
 
 function updateGenerateState() {
-  $("generateButton").disabled = !(state.image && state.audio) || !!state.job && ["queued", "running"].includes(state.job.status);
+  $("generateButton").disabled = !(state.image && state.sourceFile) || !!state.job && ["queued", "running"].includes(state.job.status);
 }
 
 function setupDrop(zoneId, inputId, setter) {
@@ -213,7 +224,7 @@ async function generate() {
   $("formError").textContent = "";
   const body = new FormData();
   body.append("character", state.image);
-  body.append("song", state.audio);
+  body.append(state.sourceMode === "text" ? "text" : "song", state.sourceFile);
   body.append("concept", $("concept").value.trim());
   $("generateButton").disabled = true;
   state.startedAt = Date.now();
@@ -234,7 +245,8 @@ async function checkHealth() {
     const response = await fetch("/api/health");
     const data = await response.json();
     const ready = data.llms?.scenario?.ok;
-    $("healthBadge").textContent = ready ? "LLM ONLINE" : "接続を確認してください";
+    const ttsReady = data.tts?.ok;
+    $("healthBadge").textContent = ready ? `LLM ONLINE · TTS ${ttsReady ? "ONLINE" : "OFFLINE"}` : "接続を確認してください";
     $("healthBadge").classList.toggle("ok", ready);
   } catch { $("healthBadge").textContent = "OFFLINE"; }
 }
@@ -245,7 +257,7 @@ $("removeImage").addEventListener("click", (e) => {
   e.preventDefault(); state.image = null; $("imagePreviewWrap").classList.add("hidden"); $("imageEmpty").classList.remove("hidden"); updateGenerateState();
 });
 $("removeAudio").addEventListener("click", (e) => {
-  e.preventDefault(); state.audio = null; $("audioPreview").pause(); $("audioPreviewWrap").classList.add("hidden"); $("audioEmpty").classList.remove("hidden"); updateGenerateState();
+  e.preventDefault(); state.sourceFile = null; state.sourceMode = null; $("audioPreview").pause(); $("textPreview").textContent = ""; $("audioPreviewWrap").classList.add("hidden"); $("audioEmpty").classList.remove("hidden"); updateGenerateState();
 });
 $("generateButton").addEventListener("click", generate);
 $("cancelButton").addEventListener("click", async () => {

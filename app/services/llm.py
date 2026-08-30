@@ -229,9 +229,18 @@ def format_h3_official_ref2va_prompt(
     identity = _single_line(_identity_instruction(character))
     direction = _single_line(visual_direction)
     vocal_ratio = float(scene.get("vocal_ratio") or 0.0)
+    narration = bool(scene.get("narration"))
     singing = vocal_ratio >= 0.35
 
-    if singing:
+    if narration:
+        performance = (
+            "<Subject 1> (S1) naturally speaks the supplied narration. The full face and "
+            "unobstructed mouth remain visible, and the lips, jaw, and facial muscles articulate "
+            "every audible phoneme in precise synchronization with <Audio 1>. No words are added, "
+            "removed, inferred, or displayed on screen."
+        )
+        summary_action = "speaks the supplied narration with clearly visible synchronized lip movement"
+    elif singing:
         performance = (
             "<Subject 1> (S1) physically performs the supplied vocal. The full face and "
             "unobstructed mouth remain visible, and the lips, jaw, and facial muscles articulate "
@@ -280,6 +289,7 @@ def enforce_reference_and_lipsync(
     identity = _identity_instruction(character)
     prompt = str(raw_prompt or "").strip()
     vocal_ratio = float(scene.get("vocal_ratio") or 0.0)
+    narration = bool(scene.get("narration"))
     if vocal_ratio >= 0.35:
         # Remove camera directions that make mouth synchronization impossible to judge.
         replacements = {
@@ -307,7 +317,7 @@ def enforce_reference_and_lipsync(
             "Use the exact same person from the reference image; preserve facial identity, hair, outfit, "
             f"and visual style unchanged: {identity}. "
             "The full face and mouth remain clearly visible and unobstructed throughout the shot. "
-            "The performer delivers the supplied vocal naturally; the lips and jaw articulate every phoneme "
+            f"The character {'speaks the supplied narration' if narration else 'delivers the supplied vocal'} naturally; the lips and jaw articulate every phoneme "
             "in precise synchronization with the reference vocal audio. Subtle natural breathing and facial "
             "muscle motion, direct performance presence. "
         )
@@ -324,9 +334,18 @@ def generate_scenario(
     scenes: list[dict[str, Any]],
     concept: str,
     character: dict[str, Any],
+    *, source_text: str = "",
 ) -> dict[str, Any]:
+    narration_instruction = (
+        "This is a spoken narration video, not a music video. Build the visual story directly from "
+        f"the complete source text below. Do not rewrite its meaning.\nSOURCE_TEXT: {source_text}\n"
+        if source_text else ""
+    )
     overview = _scenario_request(
-        "Create a coherent MV treatment. Do not change scene times.\n"
+        ("Create a coherent spoken-video treatment. " if source_text else "Create a coherent MV treatment. ")
+        + "Do not change scene times.\n"
+        + narration_instruction
+        +
         f"USER_CONCEPT: {concept or '(derive from the music and character)'}\n"
         f"CHARACTER_REFERENCE_FACTS: {json.dumps(character, ensure_ascii=False)}\n"
         "The reference character's identity, hair, face, outfit and style are immutable. "
@@ -356,6 +375,8 @@ def generate_scenario(
             "the supplied vocal. Never use a wide shot, rear view, eye-only shot or obscured mouth for a "
             "singing scene. For lower vocal_ratio explicitly describe a closed relaxed mouth. "
             "Use restrained camera motion and avoid cuts inside a generated clip.\n"
+            + narration_instruction
+            +
             f"CHARACTER_REFERENCE_FACTS: {json.dumps(character, ensure_ascii=False)}\n"
             f"TREATMENT: {json.dumps(overview, ensure_ascii=False)}\n"
             f"PREVIOUS: {json.dumps(previous, ensure_ascii=False)}\n"

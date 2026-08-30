@@ -42,6 +42,7 @@ h1 { margin: 0; font-size: clamp(24px, 3vw, 42px); letter-spacing: -.04em; }
 .file-row strong, .file-row span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-row span { color: var(--muted); font-size: 11px; margin-top: 3px; }
 audio { display: block; width: 100%; min-width: 0; max-width: 100%; height: 36px; }
+.text-preview { max-height: 120px; overflow: auto; margin: 0; padding: 10px; border-radius: 7px; background: #080b0e; color: #b9c2c9; font: 11px/1.65 ui-monospace, monospace; white-space: pre-wrap; }
 .concept-field { display: block; margin-top: 18px; }
 .concept-field > span { display: block; font-size: 13px; font-weight: 650; margin-bottom: 8px; }
 .concept-field em { color: var(--muted); font-style: normal; font-weight: 400; }

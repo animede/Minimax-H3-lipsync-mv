@@ -32,6 +32,9 @@ class Job:
     updated_at: float = 0.0
     character_file: str = ""
     song_file: str = ""
+    input_mode: str = "music"
+    text_file: str = ""
+    source_text: str = ""
     concept: str = ""
     duration: float = 0.0
     current_scene: int = 0

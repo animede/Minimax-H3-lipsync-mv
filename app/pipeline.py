@@ -20,6 +20,7 @@ from .services.audio import (
 )
 from .services.h3 import H3Client, H3Error, concatenate_and_mux
 from .services.llm import LLMError, analyze_character, generate_scenario
+from .services.tts import TTSError, synthesize_text
 
 
 class Cancelled(RuntimeError):
@@ -70,19 +71,32 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
         jobs.start_run(job_id)
         jobs.update(job_id, status="running")
         ensure_media_tools()
-        _stage(job_id, jobs, "probing", 0.02, "入力ファイルを検証しています")
+        if job.input_mode == "narration":
+            _stage(job_id, jobs, "synthesizing", 0.02, "AivisSpeechで文ごとに音声を合成しています")
+            sentence_timings = synthesize_text(job.source_text, song)
+            (analysis_dir / "sentence_timings.json").write_text(
+                json.dumps(sentence_timings, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            jobs.log(job_id, f"{len(sentence_timings)}文の読み上げ音声を合成しました")
+            _check_cancel(job_id, jobs)
+
+        _stage(job_id, jobs, "probing", 0.04, "入力ファイルを検証しています")
         duration = probe_duration(song)
         if duration <= 0:
-            raise AudioError("楽曲の長さが不正です")
+            raise AudioError("音声の長さが不正です")
         if duration > settings.max_song_seconds:
             raise AudioError(
-                f"楽曲が上限を超えています: {duration:.1f}秒 > {settings.max_song_seconds:.0f}秒"
+                f"音声が上限を超えています: {duration:.1f}秒 > {settings.max_song_seconds:.0f}秒"
             )
         jobs.update(job_id, duration=round(duration, 3))
         _check_cancel(job_id, jobs)
 
-        _stage(job_id, jobs, "separating", 0.06, "ボーカルを分離しています")
-        vocals = separate_vocals(song, analysis_dir)
+        if job.input_mode == "narration":
+            vocals = song
+            jobs.log(job_id, "読み上げ音声をVocal Lockへ直接使用します")
+        else:
+            _stage(job_id, jobs, "separating", 0.06, "ボーカルを分離しています")
+            vocals = separate_vocals(song, analysis_dir)
         _check_cancel(job_id, jobs)
 
         _stage(job_id, jobs, "analyzing_audio", 0.11, "息継ぎ・拍・セクションを解析しています")
@@ -90,6 +104,10 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
         _check_cancel(job_id, jobs)
 
         scenes = quantize_scene_plan(plan_scenes(boundary_analysis), settings.fps)
+        if job.input_mode == "narration":
+            for scene in scenes:
+                scene["narration"] = True
+                scene["vocal_ratio"] = max(0.8, float(scene.get("vocal_ratio") or 0.0))
         (analysis_dir / "scene_plan.json").write_text(
             json.dumps(scenes, ensure_ascii=False, indent=2), encoding="utf-8"
         )
@@ -102,8 +120,11 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
         (analysis_dir / "character.json").write_text(
             json.dumps(character, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        _stage(job_id, jobs, "planning", 0.22, "Gemma4-31BでMVシナリオを作成しています")
-        scenario = generate_scenario(scenes, job.concept, character)
+        _stage(job_id, jobs, "planning", 0.22, "Gemma4-31Bで映像シナリオを作成しています")
+        scenario = generate_scenario(
+            scenes, job.concept, character,
+            source_text=job.source_text if job.input_mode == "narration" else "",
+        )
         prompt_by_index = {
             int(item["index"]): item for item in scenario.get("scenes", [])
         }
@@ -224,7 +245,7 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
             jobs.update(job_id, scenes=scenes)
 
         _check_cancel(job_id, jobs)
-        _stage(job_id, jobs, "rendering", 0.93, "シーンを結合して元楽曲を合成しています")
+        _stage(job_id, jobs, "rendering", 0.93, "シーンを結合して音声を合成しています")
         output = job_dir / "output.mp4"
         concatenate_and_mux(scene_files, song, output, duration)
         jobs.finish_run(job_id)
@@ -233,18 +254,18 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
             status="completed",
             stage="completed",
             progress=1.0,
-            message="MVが完成しました",
+            message="読み上げ動画が完成しました" if job.input_mode == "narration" else "MVが完成しました",
             output_file=output.name,
             current_scene=count,
         )
-        jobs.log(job_id, "MVが完成しました")
+        jobs.log(job_id, "読み上げ動画が完成しました" if job.input_mode == "narration" else "MVが完成しました")
     except Cancelled as exc:
         jobs.finish_run(job_id)
         jobs.update(
             job_id, status="cancelled", stage="cancelled", message=str(exc), error=str(exc)
         )
         jobs.log(job_id, str(exc))
-    except (AudioError, LLMError, H3Error, OSError, ValueError) as exc:
+    except (AudioError, TTSError, LLMError, H3Error, OSError, ValueError) as exc:
         jobs.finish_run(job_id)
         jobs.update(
             job_id, status="failed", stage="failed", message="生成に失敗しました", error=str(exc)
