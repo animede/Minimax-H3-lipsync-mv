@@ -28,6 +28,15 @@ def test_generation_information_records_durations_without_clock_timestamps(tmp_p
     assert saved.total_elapsed_s >= 0
 
 
+def test_job_stores_selected_video_format(tmp_path) -> None:
+    jobs = JobStore(tmp_path)
+    job = jobs.create(
+        "character.png", "song.wav", "", width=576, height=768
+    )
+
+    assert (job.width, job.height) == (576, 768)
+
+
 def test_legacy_clock_logs_are_migrated_to_durations() -> None:
     job = Job(
         id="legacy",

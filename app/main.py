@@ -25,6 +25,16 @@ executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mv-job")
 IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
 AUDIO_SUFFIXES = {".wav", ".mp3", ".flac", ".m4a", ".aac", ".ogg"}
 TEXT_SUFFIXES = {".txt"}
+VIDEO_SIZES = {
+    (1344, 768),
+    (768, 1344),
+    (1024, 768),
+    (768, 1024),
+    (768, 576),
+    (576, 768),
+    (512, 384),
+    (384, 512),
+}
 
 
 def _safe_filename(name: str, fallback: str) -> str:
@@ -78,12 +88,16 @@ async def create_job(
     song: Annotated[UploadFile | None, File()] = None,
     text: Annotated[UploadFile | None, File()] = None,
     concept: Annotated[str, Form()] = "",
+    width: Annotated[int, Form()] = settings.width,
+    height: Annotated[int, Form()] = settings.height,
 ) -> dict:
     character_type = (character.content_type or mimetypes.guess_type(character.filename or "")[0] or "")
     if character_type not in IMAGE_TYPES:
         raise HTTPException(415, "キャラクター画像はPNG、JPEG、WebPに対応しています")
     if (song is None) == (text is None):
         raise HTTPException(422, "楽曲またはテキストのどちらか一方を指定してください")
+    if (width, height) not in VIDEO_SIZES:
+        raise HTTPException(422, "対応していない動画サイズです")
     image_name = _safe_filename(character.filename or "character.png", "character")
     input_mode = "narration" if text is not None else "music"
     source_text = ""
@@ -100,7 +114,8 @@ async def create_job(
         text_name = _safe_filename(text.filename or "script.txt", "script")
         song_name = "narration.wav"
     job = store.create(
-        image_name, song_name, concept, input_mode=input_mode, text_file=text_name
+        image_name, song_name, concept, input_mode=input_mode, text_file=text_name,
+        width=width, height=height,
     )
     input_dir = store.job_dir(job.id) / "input"
     try:

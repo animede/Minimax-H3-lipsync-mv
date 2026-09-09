@@ -168,8 +168,8 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
                 "duration": scene["duration"],
                 "prompt": scene["prompt"],
                 "seed": scene["seed"],
-                "width": settings.width,
-                "height": settings.height,
+                "width": job.width,
+                "height": job.height,
                 "fps": settings.fps,
                 "turbo": True,
                 "vocal_lock": True,
@@ -224,6 +224,9 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
                     seed=int(scene["seed"]),
                     destination=output,
                     target_seconds=float(scene["duration"]),
+                    width=job.width,
+                    height=job.height,
+                    fps=settings.fps,
                     on_progress=scene_progress,
                 )
             except H3Error as exc:

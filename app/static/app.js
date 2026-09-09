@@ -31,6 +31,7 @@ function setAudio(file) {
   }
   state.sourceFile = file;
   state.sourceMode = isText ? "text" : "song";
+  $("scriptText").value = "";
   $("audioName").textContent = file.name;
   $("audioMeta").textContent = `${readableBytes(file.size)} · ${isText ? "AivisSpeechで文単位に読み上げ" : "楽曲"}`;
   $("audioPreview").classList.toggle("hidden", isText);
@@ -42,6 +43,39 @@ function setAudio(file) {
     $("audioPreview").src = URL.createObjectURL(file);
     $("textPreview").textContent = "";
   }
+  $("audioEmpty").classList.add("hidden");
+  $("audioPreviewWrap").classList.remove("hidden");
+  $("formError").textContent = "";
+  updateGenerateState();
+}
+
+function clearSource() {
+  state.sourceFile = null;
+  state.sourceMode = null;
+  $("audioInput").value = "";
+  $("audioPreview").pause();
+  $("audioPreview").removeAttribute("src");
+  $("textPreview").textContent = "";
+  $("audioPreviewWrap").classList.add("hidden");
+  $("audioEmpty").classList.remove("hidden");
+  updateGenerateState();
+}
+
+function setPastedText(value) {
+  const text = value.trim();
+  if (!text) {
+    if (state.sourceFile?.name === "pasted-script.txt") clearSource();
+    return;
+  }
+  const file = new File([text], "pasted-script.txt", { type: "text/plain;charset=utf-8" });
+  state.sourceFile = file;
+  state.sourceMode = "text";
+  $("audioName").textContent = "貼り付けた読み上げ原稿";
+  $("audioMeta").textContent = `${readableBytes(file.size)} · AivisSpeechで文単位に読み上げ`;
+  $("audioPreview").classList.add("hidden");
+  $("audioPreview").removeAttribute("src");
+  $("textPreview").textContent = text.slice(0, 1200);
+  $("textPreview").classList.remove("hidden");
   $("audioEmpty").classList.add("hidden");
   $("audioPreviewWrap").classList.remove("hidden");
   $("formError").textContent = "";
@@ -193,6 +227,12 @@ function renderJob(job) {
   $("progressBar").style.width = `${progress}%`;
   $("sceneProgress").textContent = job.scene_count ? `シーン ${job.current_scene || 0} / ${job.scene_count}` : "シーンを解析中";
   $("elapsedTime").textContent = `合計 ${formatClock(totalElapsed(job))}`;
+  const width = Number(job.width) || 1024;
+  const height = Number(job.height) || 768;
+  $("actualSizeLabel").textContent = `${width} × ${height} 実寸プレビュー`;
+  $("actualVideo").style.width = `${width}px`;
+  $("actualVideo").style.height = `${height}px`;
+  $("resultVideo").style.aspectRatio = `${width} / ${height}`;
   renderTimings(job);
   renderScenario(job);
   $("jobError").textContent = job.error || "";
@@ -226,6 +266,9 @@ async function generate() {
   body.append("character", state.image);
   body.append(state.sourceMode === "text" ? "text" : "song", state.sourceFile);
   body.append("concept", $("concept").value.trim());
+  const [width, height] = $("videoSize").value.split("x");
+  body.append("width", width);
+  body.append("height", height);
   $("generateButton").disabled = true;
   state.startedAt = Date.now();
   try {
@@ -253,11 +296,15 @@ async function checkHealth() {
 
 setupDrop("imageDrop", "imageInput", setImage);
 setupDrop("audioDrop", "audioInput", setAudio);
+$("scriptText").addEventListener("input", (event) => setPastedText(event.target.value));
+$("videoSize").addEventListener("change", (event) => {
+  $("sizeSpec").textContent = event.target.value.replace("x", " × ");
+});
 $("removeImage").addEventListener("click", (e) => {
   e.preventDefault(); state.image = null; $("imagePreviewWrap").classList.add("hidden"); $("imageEmpty").classList.remove("hidden"); updateGenerateState();
 });
 $("removeAudio").addEventListener("click", (e) => {
-  e.preventDefault(); state.sourceFile = null; state.sourceMode = null; $("audioPreview").pause(); $("textPreview").textContent = ""; $("audioPreviewWrap").classList.add("hidden"); $("audioEmpty").classList.remove("hidden"); updateGenerateState();
+  e.preventDefault(); $("scriptText").value = ""; clearSource();
 });
 $("generateButton").addEventListener("click", generate);
 $("cancelButton").addEventListener("click", async () => {

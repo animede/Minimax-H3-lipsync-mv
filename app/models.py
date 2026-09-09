@@ -36,6 +36,8 @@ class Job:
     text_file: str = ""
     source_text: str = ""
     concept: str = ""
+    width: int = 1024
+    height: int = 768
     duration: float = 0.0
     current_scene: int = 0
     scene_count: int = 0

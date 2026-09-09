@@ -80,6 +80,9 @@ class H3Client:
         seed: int,
         destination: Path,
         target_seconds: float,
+        width: int = settings.width,
+        height: int = settings.height,
+        fps: int = settings.fps,
         on_progress: ProgressCallback | None = None,
     ) -> dict[str, Any]:
         audio_asset_id = self.upload_asset(audio_path)
@@ -88,8 +91,8 @@ class H3Client:
             "mode": "ref2v",
             "params": {
                 "prompt": prompt,
-                "width": settings.width,
-                "height": settings.height,
+                "width": width,
+                "height": height,
                 "seed": seed,
             },
             "asset_ids": [image_asset_id, audio_asset_id],
@@ -127,11 +130,11 @@ class H3Client:
         raw = destination.with_name(f"{destination.stem}_raw.mp4")
         raw.write_bytes(download.content)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        target_frames = max(1, round(target_seconds * settings.fps))
+        target_frames = max(1, round(target_seconds * fps))
         run_command([
             "ffmpeg", "-y", "-v", "error", "-i", str(raw),
-            "-an", "-frames:v", str(target_frames), "-r", str(settings.fps),
-            "-vf", f"scale={settings.width}:{settings.height}:flags=lanczos,format=yuv420p",
+            "-an", "-frames:v", str(target_frames), "-r", str(fps),
+            "-vf", f"scale={width}:{height}:flags=lanczos,format=yuv420p",
             "-c:v", "libx264", "-preset", "medium", "-crf", "18", str(destination),
         ])
         raw.unlink(missing_ok=True)

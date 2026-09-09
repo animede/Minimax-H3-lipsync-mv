@@ -9,7 +9,7 @@ Vocal Lockへ直接渡します。映像シナリオは入力原稿の内容を�
 ## 固定仕様
 
 - MiniMax-H3 Ref2VA only
-- 1024×768 / 24fps
+- 横・縦の解像度プリセット（最大1344×768 / 768×1344）/ 24fps
 - TURBO ON
 - Vocal Lock ON
 - `96gb-int8` / GPU 0

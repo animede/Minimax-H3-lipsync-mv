@@ -52,13 +52,32 @@
         </div>
       </label>
 
+      <label class="script-field">
+        <span>読み上げ原稿を直接入力 <em>任意</em></span>
+        <textarea id="scriptText" rows="6" placeholder="ここにコピーした文章を貼り付けできます。楽曲・TXTファイルとはどちらか一方を使用します。"></textarea>
+      </label>
+
       <label class="concept-field">
         <span>映像コンセプト <em>任意</em></span>
         <textarea id="concept" rows="4" maxlength="1000" placeholder="例：夜明け前の海辺。静かな始まりからサビで光が広がる。"></textarea>
       </label>
 
+      <div class="video-settings">
+        <label><span>画像サイズ</span><select id="videoSize">
+          <option value="1344x768">横・公式768p 1344 × 768（16:9）</option>
+          <option value="768x1344">縦・公式768p 768 × 1344（9:16）</option>
+          <option value="1024x768" selected>横・標準 1024 × 768</option>
+          <option value="768x1024">縦・標準 768 × 1024</option>
+          <option value="768x576">横・高速 768 × 576</option>
+          <option value="576x768">縦・高速 576 × 768</option>
+          <option value="512x384">横・最速 512 × 384</option>
+          <option value="384x512">縦・最速 384 × 512</option>
+        </select></label>
+        <p>低解像度ほど生成が速くなります。フレームレートはH3標準の24fpsです。</p>
+      </div>
+
       <div class="fixed-specs">
-        <span>H3 ONLY</span><span>1024 × 768</span><span>24 FPS</span><span>5–10 SEC</span>
+        <span>H3 ONLY</span><span id="sizeSpec">1024 × 768</span><span>24 FPS</span><span>5–10 SEC</span>
       </div>
 
       <div class="action-row">
@@ -119,7 +138,7 @@
 
   <dialog id="actualDialog" class="actual-dialog">
     <div class="dialog-toolbar">
-      <strong>1024 × 768 実寸プレビュー</strong>
+      <strong id="actualSizeLabel">1024 × 768 実寸プレビュー</strong>
       <div>
         <button id="fitToggle" type="button">画面に合わせる</button>
         <button id="closeDialog" type="button">閉じる</button>

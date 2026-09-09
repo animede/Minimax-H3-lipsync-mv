@@ -43,11 +43,15 @@ h1 { margin: 0; font-size: clamp(24px, 3vw, 42px); letter-spacing: -.04em; }
 .file-row span { color: var(--muted); font-size: 11px; margin-top: 3px; }
 audio { display: block; width: 100%; min-width: 0; max-width: 100%; height: 36px; }
 .text-preview { max-height: 120px; overflow: auto; margin: 0; padding: 10px; border-radius: 7px; background: #080b0e; color: #b9c2c9; font: 11px/1.65 ui-monospace, monospace; white-space: pre-wrap; }
-.concept-field { display: block; margin-top: 18px; }
-.concept-field > span { display: block; font-size: 13px; font-weight: 650; margin-bottom: 8px; }
-.concept-field em { color: var(--muted); font-style: normal; font-weight: 400; }
+.script-field, .concept-field { display: block; margin-top: 18px; }
+.script-field > span, .concept-field > span { display: block; font-size: 13px; font-weight: 650; margin-bottom: 8px; }
+.script-field em, .concept-field em { color: var(--muted); font-style: normal; font-weight: 400; }
 textarea { width: 100%; resize: vertical; padding: 12px; color: var(--text); background: #0c1014; border: 1px solid var(--line); border-radius: 10px; outline: none; }
 textarea:focus { border-color: var(--accent); }
+.video-settings { display: grid; gap: 10px; margin-top: 18px; }
+.video-settings label > span { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 650; }
+.video-settings select { width: 100%; padding: 10px; color: var(--text); background: #0c1014; border: 1px solid var(--line); border-radius: 9px; }
+.video-settings p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .fixed-specs { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0; }
 .fixed-specs span { padding: 5px 8px; background: #20262d; border-radius: 5px; color: #adb7bf; font: 700 10px ui-monospace, monospace; }
 .action-row { display: flex; gap: 9px; }
