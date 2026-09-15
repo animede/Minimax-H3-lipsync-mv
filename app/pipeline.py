@@ -144,12 +144,13 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
         h3 = H3Client()
         loaded = h3.ensure_loaded()
         if loaded.get("coresident"):
-            # 投影TEは近似なので、どちらのTEで生成したかは成果物の品質に直結する。
-            # 黙って落とさず、進捗メッセージに出しておく。
+            # 同居時はプリセットが変わり1シーンあたり十数秒遅くなる。テキスト
+            # エンコーダは 32B のままなので画質・追従は変わらないが、所要時間の
+            # 見込みが変わるので黙らずに出しておく。
             _stage(
                 job_id, jobs, "loading_h3", 0.27,
-                f"{'・'.join(loaded.get('coresident_with') or [])}と同居のため投影TEで動作します"
-                "(細部の再現が32B TEより落ちます)",
+                f"{'・'.join(loaded.get('coresident_with') or [])}と同居のため"
+                f"{loaded.get('preset_used')}で動作します(品質は同じ、生成は少し遅くなります)",
             )
         image_asset_id = h3.upload_asset(image)
         image_hash = _sha256(image)

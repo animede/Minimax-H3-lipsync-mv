@@ -37,17 +37,22 @@ class H3Client:
         "H3_TURBO_LORA_FILE": "minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors",
     }
 
-    # 同居(coresident)のときだけ追加する env。
-    # `96gb-int8` 単体は ref2va ピークが 73.8GB あり LTX(常駐 33GB)と同じ GPU に載らない。
-    # 投影TE は 32B TE(nf4 21GB)を Qwen3-VL-4B + 線形写像の 3.11GB へ置き換えて収める措置で、
-    # **品質を犠牲にする**(PSNR 22.64dB / 鮮鋭度 -23%。「大意は保持し細部は失う」)。
-    # MV は6セクション記法で細部を指定する設計なので、**必要がないのに落とさない**。
-    # 単独運用なら従来どおり 32B TE で走る。
-    CORESIDENT_OVERRIDES = {
-        "H3_KEEP_TRANSFORMER": "1",
-        "H3_VIDEO_VAE_FP16": "1",
-        "H3_TE_PROJ": "NicoLab28/ClipProj-MiniMax-H3",
-    }
+    # 同居(coresident)のときだけ使うプリセット。
+    # 単独用の `96gb-int8` は ref2va ピークが 73.8GB あり LTX(常駐 33GB)と同じ GPU に
+    # 載らないため、同居時だけ 48GB 級のフェーズ循環構成へ落とす。
+    #
+    # 当初は `96gb-int8` + 投影TE(H3_TE_PROJ)で収める案だったが、2026-09-15 の実測で
+    # `48gb-lowvram` が優ると判明したため差し替えた(ref2va 768×448・5秒・turbo、
+    # LTX 常駐中、いずれも連続実行の定常値):
+    #
+    #   48gb-lowvram     : 40.5秒 / GPU0 全体ピーク 74.5GiB(余裕21.0) / **32B TE のまま**
+    #   96gb-int8+投影TE : 27.5秒 / GPU0 全体ピーク 83.2GiB(余裕12.4) / 投影4B TE
+    #
+    # denoise(14.4s)も decode(3.4s)もほぼ同一で、差は全部フェーズ循環の固定費。
+    # 1本あたり13秒の代償で**品質劣化ゼロ + 余裕 8.6GiB 増**になる。MV は6セクション記法で
+    # 細部を指定する品質重視のバッチ用途なので、投影TE の近似(PSNR 22.64dB / 鮮鋭度 -23%、
+    # 「大意は保持し細部は失う」)を受け入れる理由がない。
+    CORESIDENT_PRESET = "48gb-lowvram"
 
     def _other_loaded_backends(self) -> list[str]:
         """gateway に重みを載せている h3 以外のバックエンド。"""
@@ -61,20 +66,19 @@ class H3Client:
     def ensure_loaded(self) -> dict[str, Any]:
         """H3 を常駐させる。他バックエンドがロード済みなら同居モードで載せる。
 
-        同居時は strategy=coresident(相手の VRAM を奪わない)+ 投影TE。
-        単独時は従来どおり strategy=resident + 32B TE で、品質は現行のまま。
+        同居時は strategy=coresident(相手の VRAM を奪わない)+ 48GB 級プリセット。
+        単独時は従来どおり strategy=resident + 設定のプリセット。
+        **どちらも 32B TE のままなので、テキスト条件付けの品質は変わらない。**
         """
         others = self._other_loaded_backends()
         coresident = bool(others)
-        overrides = dict(self.BASE_OVERRIDES)
-        if coresident:
-            overrides.update(self.CORESIDENT_OVERRIDES)
+        preset = self.CORESIDENT_PRESET if coresident else settings.h3_preset
         payload = {
             "backend": "h3",
-            "preset": settings.h3_preset,
+            "preset": preset,
             "gpus": settings.h3_gpus,
             "strategy": "coresident" if coresident else "resident",
-            "overrides": overrides,
+            "overrides": dict(self.BASE_OVERRIDES),
         }
         response = self._request("POST", "/api/v1/backend/load", json=payload, timeout=300)
         if not response.ok:
@@ -84,11 +88,12 @@ class H3Client:
         # coresident では status.process は「ロード済みの先頭1つ」しか表さないので、
         # backends[h3] を一次ソースにする(無い旧 gateway では process にフォールバック)。
         info = (status.get("backends") or {}).get("h3") or status.get("process") or {}
-        if info.get("preset") != settings.h3_preset:
-            raise H3Error(f"H3プリセットが一致しません: {info.get('preset')}")
+        if info.get("preset") != preset:
+            raise H3Error(f"H3プリセットが一致しません: {info.get('preset')}(期待: {preset})")
         data["coresident"] = coresident
         data["coresident_with"] = others
-        data["text_encoder"] = "projection-4b" if coresident else "qwen3-vl-32b"
+        data["preset_used"] = preset
+        data["text_encoder"] = "qwen3-vl-32b"  # 同居時も 32B のまま
         return data
 
     def status(self) -> dict[str, Any]:
