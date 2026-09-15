@@ -142,7 +142,15 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
 
         _stage(job_id, jobs, "loading_h3", 0.26, "MiniMax-H3を常駐構成で準備しています")
         h3 = H3Client()
-        h3.ensure_loaded()
+        loaded = h3.ensure_loaded()
+        if loaded.get("coresident"):
+            # 投影TEは近似なので、どちらのTEで生成したかは成果物の品質に直結する。
+            # 黙って落とさず、進捗メッセージに出しておく。
+            _stage(
+                job_id, jobs, "loading_h3", 0.27,
+                f"{'・'.join(loaded.get('coresident_with') or [])}と同居のため投影TEで動作します"
+                "(細部の再現が32B TEより落ちます)",
+            )
         image_asset_id = h3.upload_asset(image)
         image_hash = _sha256(image)
         vocals_hash = _sha256(vocals)
