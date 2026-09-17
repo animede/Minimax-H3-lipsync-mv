@@ -9,7 +9,10 @@ function readableBytes(value) {
 }
 
 function setImage(file) {
-  if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+  // MIMEタイプが空で渡るファイルマネージャがあるため拡張子でも判定する
+  const okType = file && (["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
+    (!file.type && /\.(png|jpe?g|webp)$/i.test(file.name)));
+  if (!okType) {
     $("formError").textContent = "PNG、JPEG、WebP画像を選択してください。";
     return;
   }
@@ -86,7 +89,10 @@ function updateGenerateState() {
   $("generateButton").disabled = !(state.image && state.sourceFile) || !!state.job && ["queued", "running"].includes(state.job.status);
 }
 
-function setupDrop(zoneId, inputId, setter) {
+// 枠外ドロップでブラウザがファイルを開いてページ遷移するのを防ぐ
+for (const event of ["dragover", "drop"]) window.addEventListener(event, (e) => e.preventDefault());
+
+function setupDrop(zoneId, inputId, setter, { allowUrl = false } = {}) {
   const zone = $(zoneId);
   const input = $(inputId);
   input.addEventListener("change", () => setter(input.files[0]));
@@ -96,7 +102,35 @@ function setupDrop(zoneId, inputId, setter) {
   for (const event of ["dragleave", "drop"]) zone.addEventListener(event, (e) => {
     e.preventDefault(); zone.classList.remove("dragging");
   });
-  zone.addEventListener("drop", (e) => setter(e.dataTransfer.files[0]));
+  zone.addEventListener("drop", async (e) => {
+    const file = e.dataTransfer.files[0];
+    if (file) return setter(file);
+    // 他タブの画像やファイルマネージャは File が無く URL だけ来ることがある
+    const url = (e.dataTransfer.getData("text/uri-list") ||
+                 e.dataTransfer.getData("text/plain") || "").split("\n")[0].trim();
+    if (!url || !allowUrl) {
+      $("formError").textContent = "ドロップからファイルを取り出せませんでした。クリックで選択してください。";
+      return;
+    }
+    try {
+      let resp = null;
+      if (!url.startsWith("file:")) {
+        try {
+          resp = await fetch(url, { mode: "cors" });
+          if (!resp.ok) throw new Error(resp.status);
+        } catch { resp = null; }
+      }
+      if (!resp) {
+        resp = await fetch(`/api/fetch-image?url=${encodeURIComponent(url)}`);
+        if (!resp.ok) throw new Error((await resp.json().catch(() => null))?.detail || resp.status);
+      }
+      const blob = await resp.blob();
+      const name = decodeURIComponent(url.split("/").pop().split("?")[0]) || "dropped.png";
+      setter(new File([blob], name, { type: blob.type }));
+    } catch (err) {
+      $("formError").textContent = `取り込めませんでした(${err.message})。クリックで選択してください。`;
+    }
+  });
   zone.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") input.click(); });
 }
 
@@ -294,7 +328,7 @@ async function checkHealth() {
   } catch { $("healthBadge").textContent = "OFFLINE"; }
 }
 
-setupDrop("imageDrop", "imageInput", setImage);
+setupDrop("imageDrop", "imageInput", setImage, { allowUrl: true });
 setupDrop("audioDrop", "audioInput", setAudio);
 $("scriptText").addEventListener("input", (event) => setPastedText(event.target.value));
 $("videoSize").addEventListener("change", (event) => {
@@ -333,3 +367,59 @@ setInterval(() => {
   }
 }, 1000);
 checkHealth();
+
+// ---------------- 生成履歴(リロード/再起動後も過去ジョブへ辿れる) ----------------
+function historyLabel(job) {
+  const when = job.created_at ? new Date(job.created_at * 1000).toLocaleString("ja-JP") : job.id;
+  const src = job.input_mode === "narration"
+    ? (job.text_file || "テキスト") : (job.song_file || "楽曲");
+  return `${when} · ${src}`;
+}
+
+const HISTORY_STATUS = { completed: "完了", failed: "失敗", cancelled: "中止", running: "生成中", queued: "待機" };
+
+async function loadHistory() {
+  const list = $("historyList");
+  if (!list) return;
+  try {
+    const r = await fetch("/api/jobs");
+    const d = await r.json();
+    const jobs = d.jobs || [];
+    if (!jobs.length) {
+      list.innerHTML = '<li class="history-empty">まだありません</li>';
+      return;
+    }
+    list.innerHTML = "";
+    for (const job of jobs) {
+      const li = document.createElement("li");
+      li.className = "history-item";
+      const open = document.createElement("a");
+      open.href = "#";
+      open.textContent = historyLabel(job);
+      open.addEventListener("click", (e) => {
+        e.preventDefault();
+        state.job = job;
+        renderJob(job);
+        if (["queued", "running"].includes(job.status)) watchJob(job.id);
+        $("jobOutput").scrollIntoView({ behavior: "smooth" });
+      });
+      const status = document.createElement("span");
+      status.className = `history-status history-${job.status}`;
+      status.textContent = HISTORY_STATUS[job.status] || job.status;
+      li.appendChild(open);
+      li.appendChild(status);
+      if (job.status === "completed") {
+        const dl = document.createElement("a");
+        dl.href = `/api/jobs/${job.id}/download`;
+        dl.setAttribute("download", "");
+        dl.className = "history-download";
+        dl.textContent = "MP4";
+        li.appendChild(dl);
+      }
+      list.appendChild(li);
+    }
+  } catch (e) {
+    list.innerHTML = '<li class="history-empty">履歴の取得に失敗しました</li>';
+  }
+}
+loadHistory();

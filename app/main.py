@@ -145,6 +145,39 @@ def list_jobs() -> dict:
     return {"jobs": [job.to_dict() for job in store.list()[:50]]}
 
 
+@app.get("/api/fetch-image")
+async def fetch_image(url: str):
+    """D&D画像URLの取り込み(他タブのローカルURL・file:// のみ。CORS回避プロキシ)。"""
+    from urllib.parse import unquote, urlparse
+
+    import httpx
+    from fastapi.responses import Response
+
+    parsed = urlparse(url)
+    if parsed.scheme == "file":
+        path = Path(unquote(parsed.path))
+        if not path.is_file():
+            raise HTTPException(404, f"ファイルが見つかりません: {path}")
+        media = mimetypes.guess_type(str(path))[0] or ""
+        if not media.startswith("image/"):
+            raise HTTPException(415, "画像ではありません")
+        return Response(content=path.read_bytes(), media_type=media)
+    if parsed.scheme not in ("http", "https") or parsed.hostname not in (
+        "localhost", "127.0.0.1", "::1",
+    ):
+        raise HTTPException(400, "ローカルのURLのみ取得できます")
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+    except Exception as exc:
+        raise HTTPException(502, f"画像の取得に失敗しました: {exc}")
+    ctype = resp.headers.get("content-type", "")
+    if not ctype.startswith("image/"):
+        raise HTTPException(415, "画像ではありません")
+    return Response(content=resp.content, media_type=ctype)
+
+
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str) -> dict:
     job = store.get(job_id)

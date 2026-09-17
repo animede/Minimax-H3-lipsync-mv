@@ -115,3 +115,15 @@ textarea:focus { border-color: var(--accent); }
   .panel { min-height: auto; padding: 19px; }
   .output-panel { min-height: 620px; }
 }
+
+/* 生成履歴 */
+.history-area { margin-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 14px; }
+.history-heading { margin: 0 0 8px; font-size: 14px; opacity: 0.8; }
+.history-list { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; }
+.history-item { display: flex; align-items: center; gap: 10px; padding: 6px 2px; font-size: 13px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.history-item a { color: inherit; }
+.history-status { font-size: 11px; padding: 1px 8px; border-radius: 9px; background: rgba(255, 255, 255, 0.12); }
+.history-completed { background: rgba(74, 222, 128, 0.25); }
+.history-failed, .history-cancelled { background: rgba(248, 113, 113, 0.25); }
+.history-download { margin-left: auto; font-weight: bold; }
+.history-empty { opacity: 0.6; font-size: 13px; }
