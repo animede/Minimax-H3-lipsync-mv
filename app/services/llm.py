@@ -211,8 +211,46 @@ def _subject_definition(character: dict[str, Any]) -> str:
     return description
 
 
+def frame_kind(width: int, height: int) -> str:
+    """生成サイズから構図の種類を返す: "portrait" / "square" / "landscape"。"""
+    ratio = width / max(height, 1)
+    if ratio < 0.9:
+        return "portrait"
+    if ratio > 1.1:
+        return "landscape"
+    return "square"
+
+
+# LLM へのシーン指示(縦長・正方形では被写体を中央に置かせる)。横長は従来どおり。
+_FRAME_LLM_GUIDANCE = {
+    "portrait": (
+        "The output is a VERTICAL frame for mobile viewing (9:16 or 4:5). Keep the character "
+        "horizontally centered. Place props, screens and scenery above, behind or around the "
+        "character, never to one side in a way that pushes the character toward the frame edge. "
+    ),
+    "square": (
+        "The output is a SQUARE 1:1 frame. Keep the character centered; keep props and scenery "
+        "behind the character rather than to one side. "
+    ),
+    "landscape": "",
+}
+
+# [Shot 1] の冒頭に置く構図文。H3 は文頭の指示が最も効く(2026-10-08 実測、固定カメラ句の
+# 配置 A/B)。横長は LLM の構図に任せる。
+_FRAME_SHOT_PREFIX = {
+    "portrait": (
+        "Vertical frame composition: <Subject 1> is centered horizontally, with the head and "
+        "shoulders in the upper-middle of the frame and the background arranged above and behind "
+        "the subject. "
+    ),
+    "square": "Square frame composition: <Subject 1> is centered in the frame. ",
+    "landscape": "",
+}
+
+
 def format_h3_official_ref2va_prompt(
-    scene: dict[str, Any], visual_direction: str, character: dict[str, Any]
+    scene: dict[str, Any], visual_direction: str, character: dict[str, Any],
+    frame: str = "landscape",
 ) -> str:
     """Wrap one generated clip in MiniMax H3's official Ref2VA six-section format.
 
@@ -273,7 +311,7 @@ def format_h3_official_ref2va_prompt(
         "detailed_description:\n"
         "The target video uses a coherent cinematic music-video style while fully preserving the "
         "reference character. It contains one continuous shot with no internal cut.\n"
-        f"[Shot 1] {direction} {performance}\n\n"
+        f"[Shot 1] {_FRAME_SHOT_PREFIX.get(frame, '')}{direction} {performance}\n\n"
         "overall_soundscape:\n"
         "No additional dialogue, ambience, crowd voices, or sound effects are introduced; the "
         "synchronized vocal content comes only from <Audio 1>.\n\n"
@@ -334,7 +372,7 @@ def generate_scenario(
     scenes: list[dict[str, Any]],
     concept: str,
     character: dict[str, Any],
-    *, source_text: str = "",
+    *, source_text: str = "", frame: str = "landscape",
 ) -> dict[str, Any]:
     narration_instruction = (
         "This is a spoken narration video, not a music video. Build the visual story directly from "
@@ -375,6 +413,7 @@ def generate_scenario(
             "the supplied vocal. Never use a wide shot, rear view, eye-only shot or obscured mouth for a "
             "singing scene. For lower vocal_ratio explicitly describe a closed relaxed mouth. "
             "Use restrained camera motion and avoid cuts inside a generated clip.\n"
+            + _FRAME_LLM_GUIDANCE.get(frame, "")
             + narration_instruction
             +
             f"CHARACTER_REFERENCE_FACTS: {json.dumps(character, ensure_ascii=False)}\n"
@@ -415,7 +454,7 @@ def generate_scenario(
                 scene, str(item.get("prompt") or ""), character
             )
             item["prompt"] = format_h3_official_ref2va_prompt(
-                scene, visual_direction, character
+                scene, visual_direction, character, frame=frame
             )
         outputs.extend(result)
     return {

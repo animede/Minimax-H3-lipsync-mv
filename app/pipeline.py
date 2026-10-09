@@ -21,7 +21,7 @@ from .services.audio import (
     separate_vocals,
 )
 from .services.h3 import H3Client, H3Error, concatenate_and_mux
-from .services.llm import LLMError, analyze_character, generate_scenario
+from .services.llm import LLMError, analyze_character, frame_kind, generate_scenario
 from .services.tts import TTSError, synthesize_text
 
 
@@ -126,6 +126,7 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
         scenario = generate_scenario(
             scenes, job.concept, character,
             source_text=job.source_text if job.input_mode == "narration" else "",
+            frame=frame_kind(job.width, job.height),
         )
         prompt_by_index = {
             int(item["index"]): item for item in scenario.get("scenes", [])

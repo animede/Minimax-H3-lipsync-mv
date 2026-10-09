@@ -331,9 +331,24 @@ async function checkHealth() {
 setupDrop("imageDrop", "imageInput", setImage, { allowUrl: true });
 setupDrop("audioDrop", "audioInput", setAudio);
 $("scriptText").addEventListener("input", (event) => setPastedText(event.target.value));
-$("videoSize").addEventListener("change", (event) => {
-  $("sizeSpec").textContent = event.target.value.replace("x", " × ");
-});
+// 投稿先(縦横比)× 画質 -> 生成サイズ。すべて 32 の倍数(H3 の制約)。画素数は最大でも
+// 1344×768 程度に抑えてある(48GB 級 GPU で 10 秒シーンが収まる範囲)。
+const VIDEO_SIZE_TABLE = {
+  youtube:   { hq: "1344x768", std: "1024x576", fast: "768x448" },
+  vertical:  { hq: "768x1344", std: "576x1024", fast: "448x768" },
+  igfeed:    { hq: "768x960",  std: "640x800",  fast: "512x640" },
+  square:    { hq: "960x960",  std: "768x768",  fast: "576x576" },
+  classic:   { hq: "1024x768", std: "768x576",  fast: "512x384" },
+  classic_v: { hq: "768x1024", std: "576x768",  fast: "384x512" },
+};
+function updateVideoSize() {
+  const size = VIDEO_SIZE_TABLE[$("videoPlatform").value][$("videoQuality").value];
+  $("videoSize").value = size;
+  $("sizeSpec").textContent = size.replace("x", " × ");
+}
+$("videoPlatform").addEventListener("change", updateVideoSize);
+$("videoQuality").addEventListener("change", updateVideoSize);
+updateVideoSize();
 $("removeImage").addEventListener("click", (e) => {
   e.preventDefault(); state.image = null; $("imagePreviewWrap").classList.add("hidden"); $("imageEmpty").classList.remove("hidden"); updateGenerateState();
 });
