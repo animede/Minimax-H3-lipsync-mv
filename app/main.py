@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import ROOT, settings
 from .job_store import store
 from .pipeline import run_pipeline
+from .services.h3 import H3Client
 from .services.llm import LLMError, check_models
 from .services.tts import TTSError, check_tts, read_text_file
 
@@ -61,6 +62,16 @@ async def _save_upload(upload: UploadFile, destination: Path, limit: int) -> Non
 @app.get("/", response_class=HTMLResponse)
 def index() -> FileResponse:
     return FileResponse(ROOT / "app" / "static" / "index.html")
+
+
+@app.get("/api/h3/capacity")
+def h3_capacity() -> dict:
+    """この GPU で収まるサイズの目安(UI の警告表示用)。"""
+    try:
+        return H3Client().capacity()
+    except Exception as exc:  # noqa: BLE001 - 目安なので取れなければ制限なし扱い
+        return {"gpu_gb": None, "preset": None, "decode_gpu": None, "max_pixels": None,
+                "error": str(exc)}
 
 
 @app.get("/api/health")

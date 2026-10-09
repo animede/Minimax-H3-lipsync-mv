@@ -341,11 +341,22 @@ const VIDEO_SIZE_TABLE = {
   classic:   { hq: "1024x768", std: "768x576",  fast: "512x384" },
   classic_v: { hq: "768x1024", std: "576x768",  fast: "384x512" },
 };
+// この GPU で 10 秒シーンが収まる画素数の目安(/api/h3/capacity、null = 制限なし)。
+let gpuCapacity = { max_pixels: null, gpu_gb: null };
 function updateVideoSize() {
   const size = VIDEO_SIZE_TABLE[$("videoPlatform").value][$("videoQuality").value];
   $("videoSize").value = size;
   $("sizeSpec").textContent = size.replace("x", " × ");
+  const [w, h] = size.split("x").map(Number);
+  const limit = gpuCapacity.max_pixels;
+  $("sizeWarning").textContent = (limit && w * h > limit)
+    ? `⚠ このGPU(${gpuCapacity.gpu_gb ?? "?"}GB)ではメモリ不足で失敗する可能性があります。画質を下げてください。`
+    : "";
 }
+fetch("/api/h3/capacity")
+  .then((r) => r.json())
+  .then((cap) => { gpuCapacity = cap; updateVideoSize(); })
+  .catch(() => {});
 $("videoPlatform").addEventListener("change", updateVideoSize);
 $("videoQuality").addEventListener("change", updateVideoSize);
 updateVideoSize();

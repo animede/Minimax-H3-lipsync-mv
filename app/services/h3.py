@@ -60,6 +60,17 @@ class H3Client:
     # peak 35.6GB / 定常 131s(denoise 98s + decode 21s)。96gb-int8 は同条件
     # peak 77.4GB で 48GB には載らない。
     SMALL_GPU_PRESET = "ref2va-only-32gb"
+    # 24GB 級(RTX 4090 等)用。VAE をフェーズごとに退避する分だけ 32GB 用より常駐が小さい。
+    TINY_GPU_PRESET = "ref2va-only-24gb"
+    SMALL_GPU_PRESETS = (SMALL_GPU_PRESET, TINY_GPU_PRESET)
+    # 32GB 用構成を選ぶ下限(RTX 5090 の総容量は約 31.8GiB)。
+    SMALL_GPU_MIN_GB = 28.0
+    # 10 秒シーンで収まる画素数の上限(GPU 1 枚・decode も同じ GPU、2026-10-10 実測):
+    #   32GB 窓(空き 30GiB): 1024×576 = 589,824px で peak 28.5GiB(余裕 1.5GiB)
+    #   24GB 窓(空き 23GiB):  768×448 = 344,064px で peak 19.9GiB(余裕 3GiB)
+    # 40GB 以上は全サイズ可(48GB で 1344×768 が peak 33.6GB、GPU1 decode 時)。
+    MAX_PIXELS_32GB = 1024 * 576
+    MAX_PIXELS_24GB = 768 * 448
     # これ未満の GPU では LTX との同居(coresident)を試みない(48GB では LTX ~29GB と
     # H3 の同居が成立しないため、gateway に入れ替えさせる)。
     CORESIDENT_MIN_GPU_GB = 90.0
@@ -101,8 +112,29 @@ class H3Client:
     def _resolve_preset(self) -> str:
         if settings.h3_preset and settings.h3_preset != "auto":
             return settings.h3_preset
+        total = self._gpu_total_gb() or 0
+        if total >= self.CORESIDENT_MIN_GPU_GB:
+            return "96gb-int8"
+        if total >= self.SMALL_GPU_MIN_GB:
+            return self.SMALL_GPU_PRESET
+        return self.TINY_GPU_PRESET
+
+    def capacity(self) -> dict[str, Any]:
+        """UI 向け: この GPU で 10 秒シーンが収まる画素数の目安。"""
         total = self._gpu_total_gb()
-        return "96gb-int8" if (total or 0) >= self.CORESIDENT_MIN_GPU_GB else self.SMALL_GPU_PRESET
+        preset = self._resolve_preset()
+        if (total or 0) >= 40.0:
+            max_pixels = None
+        elif (total or 0) >= self.SMALL_GPU_MIN_GB:
+            max_pixels = self.MAX_PIXELS_32GB
+        else:
+            max_pixels = self.MAX_PIXELS_24GB
+        return {
+            "gpu_gb": round(total, 1) if total else None,
+            "preset": preset,
+            "decode_gpu": self._decode_gpu() if preset in self.SMALL_GPU_PRESETS else None,
+            "max_pixels": max_pixels,
+        }
 
     def _other_loaded_backends(self) -> list[str]:
         """gateway に重みを載せている h3 以外のバックエンド。"""
@@ -127,7 +159,7 @@ class H3Client:
         preset = self.CORESIDENT_PRESET if coresident else self._resolve_preset()
         gpus = settings.h3_gpus
         overrides = dict(self.BASE_OVERRIDES)
-        decode_gpu = self._decode_gpu() if preset == self.SMALL_GPU_PRESET else None
+        decode_gpu = self._decode_gpu() if preset in self.SMALL_GPU_PRESETS else None
         if decode_gpu is not None:
             # 計算 GPU を先頭、decode GPU を 2 枚目にして可視化し、cuda:1 で decode させる。
             # バックエンドは denoise 完了でロックを手放すので、次シーンを先に投入して
