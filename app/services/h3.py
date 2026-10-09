@@ -77,6 +77,27 @@ class H3Client:
         except (OSError, subprocess.SubprocessError, ValueError, IndexError):
             return None
 
+    def _gpu_indices(self) -> list[str]:
+        try:
+            out = subprocess.run(
+                ["nvidia-smi", "--query-gpu=index", "--format=csv,noheader"],
+                capture_output=True, text=True, timeout=10, check=True,
+            ).stdout
+            return [line.strip() for line in out.splitlines() if line.strip()]
+        except (OSError, subprocess.SubprocessError):
+            return []
+
+    def _decode_gpu(self) -> str | None:
+        """decode を回す 2 枚目の GPU の物理 index(使わないなら None)。"""
+        value = settings.h3_decode_gpu
+        if value == "off":
+            return None
+        compute = (settings.h3_gpus or "0").split(",")[0].strip() or "0"
+        if value == "auto":
+            others = [i for i in self._gpu_indices() if i != compute]
+            return others[0] if others else None
+        return value if value != compute else None
+
     def _resolve_preset(self) -> str:
         if settings.h3_preset and settings.h3_preset != "auto":
             return settings.h3_preset
@@ -104,12 +125,21 @@ class H3Client:
         # 同居は 96GB 級でだけ試す。それ未満では resident で gateway に入れ替えさせる。
         coresident = bool(others) and (total or 0) >= self.CORESIDENT_MIN_GPU_GB
         preset = self.CORESIDENT_PRESET if coresident else self._resolve_preset()
+        gpus = settings.h3_gpus
+        overrides = dict(self.BASE_OVERRIDES)
+        decode_gpu = self._decode_gpu() if preset == self.SMALL_GPU_PRESET else None
+        if decode_gpu is not None:
+            # 計算 GPU を先頭、decode GPU を 2 枚目にして可視化し、cuda:1 で decode させる。
+            # バックエンドは denoise 完了でロックを手放すので、次シーンを先に投入して
+            # おけば decode と次の denoise が並行する(pipeline.py 側で先行投入する)。
+            gpus = f"{gpus.split(',')[0]},{decode_gpu}"
+            overrides["H3_DECODE_DEVICE"] = "cuda:1"
         payload = {
             "backend": "h3",
             "preset": preset,
-            "gpus": settings.h3_gpus,
+            "gpus": gpus,
             "strategy": "coresident" if coresident else "resident",
-            "overrides": dict(self.BASE_OVERRIDES),
+            "overrides": overrides,
         }
         response = self._request("POST", "/api/v1/backend/load", json=payload, timeout=300)
         if not response.ok:
@@ -125,6 +155,7 @@ class H3Client:
         data["coresident_with"] = others
         data["preset_used"] = preset
         data["text_encoder"] = "qwen3-vl-32b"  # 同居時も 32B のまま
+        data["decode_gpu"] = decode_gpu
         return data
 
     def status(self) -> dict[str, Any]:
@@ -146,13 +177,69 @@ class H3Client:
             raise H3Error("H3アセットIDが返されませんでした")
         return asset_id
 
-    def generate_scene(
+    def submit_scene(
         self,
         *,
         image_asset_id: str,
         audio_path: Path,
         prompt: str,
         seed: int,
+        width: int = settings.width,
+        height: int = settings.height,
+        submit_timeout: float = 900.0,
+    ) -> str:
+        """シーンを投入し、バックエンドで着手した時点でジョブ ID を返す。
+
+        前のシーンの denoise 中は gateway が 409(busy)を返すので、着手できるまで
+        再試行する(前シーンが decode に入った瞬間に通る = decode と次の denoise が
+        並行する)。着手確認まで待つのは、受理直後の数 ms の窓で次の投入が 409 ->
+        failed になるのを防ぐため(realtime-narration-video と同じ方式)。
+        """
+        audio_asset_id = self.upload_asset(audio_path)
+        extra: dict[str, Any] = {"turbo": True}
+        if settings.h3_ref_short_edge > 0:
+            extra["reference_image_short_edge"] = settings.h3_ref_short_edge
+        body = {
+            "backend": "h3",
+            "mode": "ref2v",
+            "params": {"prompt": prompt, "width": width, "height": height, "seed": seed},
+            "asset_ids": [image_asset_id, audio_asset_id],
+            "extra": extra,
+            "auto_load": False,
+        }
+        deadline = time.monotonic() + submit_timeout
+        while True:
+            response = self._request("POST", "/api/v1/generate", json=body, timeout=60)
+            if response.status_code == 409 and time.monotonic() < deadline:
+                time.sleep(0.2)
+                continue
+            if not response.ok:
+                raise H3Error(f"H3生成受付に失敗しました: HTTP {response.status_code}: {response.text[:800]}")
+            break
+        job_id = str(response.json().get("id") or "")
+        if not job_id:
+            raise H3Error("H3ジョブIDが返されませんでした")
+        self._wait_started(job_id, deadline)
+        return job_id
+
+    def _wait_started(self, job_id: str, deadline: float) -> None:
+        while time.monotonic() < deadline:
+            try:
+                busy = self._request("GET", "/h3/api/status", timeout=10)
+                if busy.ok and busy.json().get("busy"):
+                    return
+                job = self._request("GET", f"/api/v1/jobs/{job_id}", timeout=10)
+                if job.ok and job.json().get("status") in {"completed", "failed", "interrupted", "cancelled"}:
+                    return  # 着手前に終わった/失敗した: finish_scene が結果を報告する
+            except (H3Error, ValueError):
+                pass
+            time.sleep(0.05)
+        raise H3Error("H3ジョブがバックエンドで開始されませんでした(タイムアウト)")
+
+    def finish_scene(
+        self,
+        job_id: str,
+        *,
         destination: Path,
         target_seconds: float,
         width: int = settings.width,
@@ -160,27 +247,7 @@ class H3Client:
         fps: int = settings.fps,
         on_progress: ProgressCallback | None = None,
     ) -> dict[str, Any]:
-        audio_asset_id = self.upload_asset(audio_path)
-        body = {
-            "backend": "h3",
-            "mode": "ref2v",
-            "params": {
-                "prompt": prompt,
-                "width": width,
-                "height": height,
-                "seed": seed,
-            },
-            "asset_ids": [image_asset_id, audio_asset_id],
-            "extra": {"turbo": True},
-            "auto_load": False,
-        }
-        response = self._request("POST", "/api/v1/generate", json=body, timeout=60)
-        if not response.ok:
-            raise H3Error(f"H3生成受付に失敗しました: HTTP {response.status_code}: {response.text[:800]}")
-        job_id = str(response.json().get("id") or "")
-        if not job_id:
-            raise H3Error("H3ジョブIDが返されませんでした")
-
+        """投入済みジョブの完了を待ち、出力を取得してシーン尺に整える。"""
         while True:
             job_response = self._request("GET", f"/api/v1/jobs/{job_id}", timeout=30)
             if not job_response.ok:
@@ -214,6 +281,30 @@ class H3Client:
         ])
         raw.unlink(missing_ok=True)
         return {"gateway_job_id": job_id, "result": result, "file": str(destination)}
+
+    def generate_scene(
+        self,
+        *,
+        image_asset_id: str,
+        audio_path: Path,
+        prompt: str,
+        seed: int,
+        destination: Path,
+        target_seconds: float,
+        width: int = settings.width,
+        height: int = settings.height,
+        fps: int = settings.fps,
+        on_progress: ProgressCallback | None = None,
+    ) -> dict[str, Any]:
+        """互換: 1 シーンを投入して完了まで待つ(先行投入しない呼び出し向け)。"""
+        job_id = self.submit_scene(
+            image_asset_id=image_asset_id, audio_path=audio_path, prompt=prompt,
+            seed=seed, width=width, height=height,
+        )
+        return self.finish_scene(
+            job_id, destination=destination, target_seconds=target_seconds,
+            width=width, height=height, fps=fps, on_progress=on_progress,
+        )
 
 
 def concatenate_and_mux(scene_files: list[Path], song: Path, destination: Path, duration: float) -> Path:

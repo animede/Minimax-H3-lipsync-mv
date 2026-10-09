@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import hashlib
 import json
 import time
@@ -159,6 +161,56 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
         scene_files: list[Path] = []
         count = len(scenes)
         _stage(job_id, jobs, "generating", 0.28, "H3で各シーンを生成しています")
+
+        # 先行投入: シーン N を投入(= 前シーンの denoise 完了待ち)してから、前シーン
+        # N-1 の完了(decode・取得・整形)を待つ。decode を 2 枚目の GPU に回す構成では
+        # 前シーンの decode と次シーンの denoise が並行し、連続生成の間隔が縮む。
+        # 1 GPU 構成でも順序が変わるだけで結果は同じ。
+        def finish(entry: dict[str, Any]) -> None:
+            position = entry["position"]
+            base = 0.28 + (position - 1) / count * 0.62
+            span = 0.62 / count
+
+            def scene_progress(
+                value: float,
+                state: str,
+                base_progress: float = base,
+                scene_span: float = span,
+                scene_position: int = position,
+            ) -> None:
+                jobs.update(job_id, progress=min(0.9, base_progress + scene_span * value), message=(
+                    f"H3シーン {scene_position} / {count}: {state} {value * 100:.0f}%"
+                ))
+
+            try:
+                h3.finish_scene(
+                    entry["job_id"],
+                    destination=entry["output"],
+                    target_seconds=float(entry["scene"]["duration"]),
+                    width=job.width,
+                    height=job.height,
+                    fps=settings.fps,
+                    on_progress=scene_progress,
+                )
+            except H3Error as exc:
+                if _cancelled(job_id, jobs):
+                    raise Cancelled("現在のH3シーン完了後にキャンセルしました") from exc
+                raise
+            finally:
+                jobs.record_timing(
+                    job_id,
+                    "generating_scene",
+                    f"H3シーン {position} / {count}",
+                    time.monotonic() - entry["started"],
+                    kind="scene",
+                )
+            entry["scene"]["video_file"] = entry["output"].name
+            entry["metadata_path"].write_text(
+                json.dumps(entry["metadata"], ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            jobs.update(job_id, scenes=scenes)
+
+        pending: dict[str, Any] | None = None
         for position, scene in enumerate(scenes, start=1):
             _check_cancel(job_id, jobs)
             scene_started = time.monotonic()
@@ -182,6 +234,7 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
                 "fps": settings.fps,
                 "turbo": True,
                 "vocal_lock": True,
+                "reference_short_edge": settings.h3_ref_short_edge,
             }
             cached_metadata = None
             if metadata_path.is_file():
@@ -203,58 +256,36 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
                     kind="scene",
                 )
                 continue
-            base = 0.28 + (position - 1) / count * 0.62
-            span = 0.62 / count
             jobs.update(
                 job_id,
                 stage="generating",
-                progress=base,
+                progress=0.28 + (position - 1) / count * 0.62,
                 message=f"H3でシーン {position} / {count} を生成しています",
                 current_scene=position,
             )
             jobs.log(job_id, f"シーン{position}: {scene['start']:.2f}–{scene['end']:.2f}秒")
-
-            def scene_progress(
-                value: float,
-                state: str,
-                base_progress: float = base,
-                scene_span: float = span,
-                scene_position: int = position,
-            ) -> None:
-                jobs.update(job_id, progress=min(0.9, base_progress + scene_span * value), message=(
-                    f"H3シーン {scene_position} / {count}: {state} {value * 100:.0f}%"
-                ))
-
             try:
-                h3.generate_scene(
+                submitted = h3.submit_scene(
                     image_asset_id=image_asset_id,
                     audio_path=wav,
                     prompt=str(scene["prompt"]),
                     seed=int(scene["seed"]),
-                    destination=output,
-                    target_seconds=float(scene["duration"]),
                     width=job.width,
                     height=job.height,
-                    fps=settings.fps,
-                    on_progress=scene_progress,
                 )
             except H3Error as exc:
                 if _cancelled(job_id, jobs):
                     raise Cancelled("現在のH3シーン完了後にキャンセルしました") from exc
                 raise
-            finally:
-                jobs.record_timing(
-                    job_id,
-                    "generating_scene",
-                    f"H3シーン {position} / {count}",
-                    time.monotonic() - scene_started,
-                    kind="scene",
-                )
-            scene["video_file"] = output.name
-            metadata_path.write_text(
-                json.dumps(generation_metadata, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            jobs.update(job_id, scenes=scenes)
+            if pending is not None:
+                finish(pending)
+            pending = {
+                "job_id": submitted, "position": position, "scene": scene,
+                "output": output, "metadata_path": metadata_path,
+                "metadata": generation_metadata, "started": scene_started,
+            }
+        if pending is not None:
+            finish(pending)
 
         _check_cancel(job_id, jobs)
         _stage(job_id, jobs, "rendering", 0.93, "シーンを結合して音声を合成しています")

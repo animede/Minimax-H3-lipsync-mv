@@ -48,6 +48,13 @@ class Settings:
     # 明示値はそのまま使う。
     h3_preset: str = os.getenv("H3_PRESET", "auto")
     h3_gpus: str = os.getenv("H3_GPUS", "0")
+    # 2枚目の GPU で decode を並行させる(連続生成の間隔短縮)。"auto" = 2枚目があれば
+    # 使う / "off" = 使わない / 数字 = その GPU を使う。96GB 級プリセットでは使わない。
+    h3_decode_gpu: str = os.getenv("H3_DECODE_GPU", "auto").strip()
+    # H3 に渡す参照画像の短辺(px)。小さいほど denoise が速い。2026-10-10 実測
+    # (1024×768・10s): 2048 -> 1024 で denoise 98.3s -> 83.5s(-15%)、同一 seed の
+    # 目視で同一性・衣装・鮮鋭度は同等。0 = バックエンド既定(2048)。
+    h3_ref_short_edge: int = int(os.getenv("H3_REF_SHORT_EDGE", "1024"))
     tts_url: str = os.getenv("TTS_URL", "http://127.0.0.1:10101").rstrip("/")
     tts_speaker_id: int = int(os.getenv("TTS_SPEAKER_ID", "888753760"))
 
