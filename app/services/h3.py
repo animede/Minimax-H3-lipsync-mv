@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -54,6 +55,34 @@ class H3Client:
     # 「大意は保持し細部は失う」)を受け入れる理由がない。
     CORESIDENT_PRESET = "48gb-lowvram"
 
+    # 96GB 級未満の GPU 用の既定プリセット(ck-w4a8 pruned + pinned 系)。
+    # 2026-10-10 実測(RTX PRO 5000 48GB、1024×768・10.1s・243f・turbo):
+    # peak 35.6GB / 定常 131s(denoise 98s + decode 21s)。96gb-int8 は同条件
+    # peak 77.4GB で 48GB には載らない。
+    SMALL_GPU_PRESET = "ref2va-only-32gb"
+    # これ未満の GPU では LTX との同居(coresident)を試みない(48GB では LTX ~29GB と
+    # H3 の同居が成立しないため、gateway に入れ替えさせる)。
+    CORESIDENT_MIN_GPU_GB = 90.0
+
+    def _gpu_total_gb(self) -> float | None:
+        """計算 GPU(H3_GPUS の先頭)の総 VRAM(GB)。取得できなければ None。"""
+        index = (settings.h3_gpus or "0").split(",")[0].strip() or "0"
+        try:
+            out = subprocess.run(
+                ["nvidia-smi", f"--id={index}", "--query-gpu=memory.total",
+                 "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=10, check=True,
+            ).stdout.strip()
+            return float(out.splitlines()[0]) / 1024
+        except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+            return None
+
+    def _resolve_preset(self) -> str:
+        if settings.h3_preset and settings.h3_preset != "auto":
+            return settings.h3_preset
+        total = self._gpu_total_gb()
+        return "96gb-int8" if (total or 0) >= self.CORESIDENT_MIN_GPU_GB else self.SMALL_GPU_PRESET
+
     def _other_loaded_backends(self) -> list[str]:
         """gateway に重みを載せている h3 以外のバックエンド。"""
         status = self.status()
@@ -71,8 +100,10 @@ class H3Client:
         **どちらも 32B TE のままなので、テキスト条件付けの品質は変わらない。**
         """
         others = self._other_loaded_backends()
-        coresident = bool(others)
-        preset = self.CORESIDENT_PRESET if coresident else settings.h3_preset
+        total = self._gpu_total_gb()
+        # 同居は 96GB 級でだけ試す。それ未満では resident で gateway に入れ替えさせる。
+        coresident = bool(others) and (total or 0) >= self.CORESIDENT_MIN_GPU_GB
+        preset = self.CORESIDENT_PRESET if coresident else self._resolve_preset()
         payload = {
             "backend": "h3",
             "preset": preset,

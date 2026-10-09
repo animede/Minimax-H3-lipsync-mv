@@ -43,7 +43,10 @@ class Settings:
     stem_api_url: str = os.getenv("STEM_API_URL", "http://127.0.0.1:8889").rstrip("/")
     demucs_python: str = os.getenv("DEMUCS_PYTHON", "python3")
     h3_gateway_url: str = os.getenv("H3_GATEWAY_URL", "http://127.0.0.1:8630").rstrip("/")
-    h3_preset: str = os.getenv("H3_PRESET", "96gb-int8")
+    # "auto"(既定)= 計算 GPU の VRAM で選ぶ: 90GB 以上なら 96gb-int8(従来)、
+    # それ未満なら ck-w4a8 系の ref2va-only-32gb(1024×768×10s で peak 35.6GB 実測)。
+    # 明示値はそのまま使う。
+    h3_preset: str = os.getenv("H3_PRESET", "auto")
     h3_gpus: str = os.getenv("H3_GPUS", "0")
     tts_url: str = os.getenv("TTS_URL", "http://127.0.0.1:10101").rstrip("/")
     tts_speaker_id: int = int(os.getenv("TTS_SPEAKER_ID", "888753760"))
