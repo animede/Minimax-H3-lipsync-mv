@@ -72,6 +72,12 @@ Two things speed up continuous generation:
 - **Decoding on a second GPU**: if a second GPU is present, decoding runs there
   (`H3_DECODE_GPU=auto`)
 
+**A 12 GB-class card is recommended as the second GPU.** Decoding a 1024×768,
+10-second scene used 7.9 GB on the second GPU. An 8 GB-class card should fit when you
+stick to the Fast sizes, but this has not been tested on real hardware. Decode memory for
+the High quality sizes (such as 1344×768) has not been measured, so even a 12 GB card has
+less headroom there.
+
 Measured on an RTX PRO 5000 (48 GB) + RTX PRO 4000 (24 GB) with 1024×768 scenes of about
 10 seconds: **one scene every 89 seconds** (131 seconds when scenes are processed one at
 a time).
