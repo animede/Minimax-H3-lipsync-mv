@@ -46,9 +46,11 @@ def split_caption(text: str, max_chars: int) -> list[str]:
         # 句読点を最優先にし、空白(英単語の区切り)で切るのは句読点が無いときだけ。
         cut = next((i for i in window if text[i - 1] in _BREAK_AFTER), -1)
         if cut <= 0:
-            # 英単語どうしの間("Phase C" の空白など)では切らない。
+            # 英単語どうしの間("Phase C" の空白など)と、数字の前後("2 本" など。数字と
+            # 助数詞が離れる)では切らない。
             cut = next((i for i in window if text[i - 1] == " "
-                        and not (_ascii_word(text[i - 2]) and _ascii_word(text[i: i + 1]))), -1)
+                        and not (_ascii_word(text[i - 2]) and _ascii_word(text[i: i + 1]))
+                        and not text[i - 2].isdigit() and not text[i: i + 1].isdigit()), -1)
         if cut <= 0:
             # ひらがなの後に漢字・カタカナ・英字が続く位置(「まとめて|磨き」のような
             # 助詞・語尾の後)。形態素解析なしで語の途中を避ける簡易規則。

@@ -26,3 +26,8 @@ def test_writes_ass_and_srt(tmp_path):
     assert "PlayResY: 1024" in ass and "｛です｝" in ass  # ASS 制御文字は全角化
     srt = (tmp_path / "s.srt").read_text(encoding="utf-8")
     assert "00:00:00,000 --> 00:00:02,500" in srt
+
+
+def test_does_not_separate_number_from_counter():
+    lines = split_caption("改善案としては、テロップ付きとテロップなしの 2 本を毎回両方出力するのが手軽です。", 24)
+    assert not any(line.endswith("2") for line in lines)
