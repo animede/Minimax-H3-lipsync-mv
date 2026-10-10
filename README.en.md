@@ -61,7 +61,8 @@ sentence ("Show captions", on by default). The timing comes from synthesizing th
 narration one sentence at a time, so captions stay in sync without speech recognition.
 
 - Long sentences are split at punctuation, spaces and hiragana-to-kanji boundaries into
-  display units of at most two lines
+  display units of at most two lines (never between two English words or next to a
+  number, so "2 本" stays on one line)
 - In vertical video, captions sit a little higher so they do not overlap the controls of
   apps such as TikTok
 - The same captions can be downloaded as an SRT file (to upload as a subtitle track)
