@@ -21,6 +21,7 @@ from .services.audio import (
 )
 from .services.h3 import H3Client, H3Error, concatenate_and_mux
 from .services.llm import LLMError, analyze_character, frame_kind, generate_scenario
+from .services.subtitles import write_subtitles
 from .services.tts import TTSError, synthesize_text
 
 
@@ -290,7 +291,17 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
         _check_cancel(job_id, jobs)
         _stage(job_id, jobs, "rendering", 0.93, "シーンを結合して音声を合成しています")
         output = job_dir / "output.mp4"
-        concatenate_and_mux(scene_files, song, output, duration)
+        subtitles_ass = None
+        timings_path = analysis_dir / "sentence_timings.json"
+        if job.input_mode == "narration" and job.subtitles and timings_path.is_file():
+            subtitles_ass = job_dir / "subtitles.ass"
+            count = write_subtitles(
+                json.loads(timings_path.read_text(encoding="utf-8")),
+                job.width, job.height, subtitles_ass, job_dir / "subtitles.srt",
+            )
+            jobs.update(job_id, subtitle_file="subtitles.srt")
+            jobs.log(job_id, f"テロップを{count}枚作成しました")
+        concatenate_and_mux(scene_files, song, output, duration, subtitles_ass=subtitles_ass)
         jobs.finish_run(job_id)
         jobs.update(
             job_id,

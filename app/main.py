@@ -104,6 +104,7 @@ async def create_job(
     concept: Annotated[str, Form()] = "",
     width: Annotated[int, Form()] = settings.width,
     height: Annotated[int, Form()] = settings.height,
+    subtitles: Annotated[bool, Form()] = True,
 ) -> dict:
     character_type = (character.content_type or mimetypes.guess_type(character.filename or "")[0] or "")
     if character_type not in IMAGE_TYPES:
@@ -129,7 +130,7 @@ async def create_job(
         song_name = "narration.wav"
     job = store.create(
         image_name, song_name, concept, input_mode=input_mode, text_file=text_name,
-        width=width, height=height,
+        width=width, height=height, subtitles=subtitles,
     )
     input_dir = store.job_dir(job.id) / "input"
     try:
@@ -273,6 +274,19 @@ def _output(job_id: str) -> tuple[Path, str]:
 def view_output(job_id: str) -> FileResponse:
     path, _ = _output(job_id)
     return FileResponse(path, media_type="video/mp4")
+
+
+@app.get("/api/jobs/{job_id}/subtitles.srt")
+def download_subtitles(job_id: str) -> FileResponse:
+    """読み上げ動画のテロップ(SRT)。SNS に字幕ファイルとしてアップロードする用。"""
+    job = store.get(job_id)
+    if job is None or not job.subtitle_file:
+        raise HTTPException(404, "テロップがありません")
+    path = (store.job_dir(job_id) / job.subtitle_file).resolve()
+    if path.parent != store.job_dir(job_id).resolve() or not path.is_file():
+        raise HTTPException(404, "テロップがありません")
+    filename = f"{Path(job.song_file).stem}_H3_Talk.srt"
+    return FileResponse(path, media_type="application/x-subrip", filename=filename)
 
 
 @app.get("/api/jobs/{job_id}/download")

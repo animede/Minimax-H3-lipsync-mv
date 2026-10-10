@@ -38,6 +38,9 @@ class Job:
     concept: str = ""
     width: int = 1024
     height: int = 768
+    # 読み上げ時にテロップを焼き込む(歌の MV では使わない)。
+    subtitles: bool = True
+    subtitle_file: str = ""
     duration: float = 0.0
     current_scene: int = 0
     scene_count: int = 0

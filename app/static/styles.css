@@ -127,3 +127,6 @@ textarea:focus { border-color: var(--accent); }
 .history-failed, .history-cancelled { background: rgba(248, 113, 113, 0.25); }
 .history-download { margin-left: auto; font-weight: bold; }
 .history-empty { opacity: 0.6; font-size: 13px; }
+
+.checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
+.checkbox-row input { width: auto; }

@@ -68,7 +68,7 @@ class JobStore:
     def create(
         self, character_file: str, song_file: str, concept: str, *,
         input_mode: str = "music", text_file: str = "", source_text: str = "",
-        width: int = 1024, height: int = 768,
+        width: int = 1024, height: int = 768, subtitles: bool = True,
     ) -> Job:
         now = time.time()
         job = Job(
@@ -83,6 +83,7 @@ class JobStore:
             source_text=source_text,
             width=width,
             height=height,
+            subtitles=subtitles,
         )
         with self._lock:
             self._jobs[job.id] = job

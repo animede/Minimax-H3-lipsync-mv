@@ -339,7 +339,10 @@ class H3Client:
         )
 
 
-def concatenate_and_mux(scene_files: list[Path], song: Path, destination: Path, duration: float) -> Path:
+def concatenate_and_mux(
+    scene_files: list[Path], song: Path, destination: Path, duration: float,
+    subtitles_ass: Path | None = None,
+) -> Path:
     if not scene_files:
         raise H3Error("結合するシーン動画がありません")
     concat_file = destination.with_suffix(".concat.txt")
@@ -353,10 +356,17 @@ def concatenate_and_mux(scene_files: list[Path], song: Path, destination: Path, 
             "ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0",
             "-i", str(concat_file), "-c", "copy", str(video_only),
         ])
+        # テロップを焼き込むときだけ映像を再エンコードする(それ以外はコピーのまま)。
+        video_codec = ["-c:v", "copy"]
+        if subtitles_ass is not None:
+            # ass フィルタの引数はパス中の : や \ をエスケープする必要がある。
+            ass_arg = str(subtitles_ass).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+            video_codec = ["-vf", f"ass='{ass_arg}'", "-c:v", "libx264", "-preset", "medium",
+                           "-crf", "18", "-pix_fmt", "yuv420p"]
         run_command([
             "ffmpeg", "-y", "-v", "error", "-i", str(video_only), "-i", str(song),
             "-map", "0:v:0", "-map", "1:a:0", "-t", f"{duration:.3f}",
-            "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart",
+            *video_codec, "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart",
             str(destination),
         ])
     finally:

@@ -278,6 +278,8 @@ function renderJob(job) {
     $("resultVideo").src = videoUrl;
     $("actualVideo").src = videoUrl;
     $("downloadButton").href = `/api/jobs/${job.id}/download`;
+    $("subtitleButton").href = `/api/jobs/${job.id}/subtitles.srt`;
+    $("subtitleButton").classList.toggle("hidden", !job.subtitle_file);
     $("videoArea").classList.remove("hidden");
   }
   updateGenerateState();
@@ -303,6 +305,7 @@ async function generate() {
   const [width, height] = $("videoSize").value.split("x");
   body.append("width", width);
   body.append("height", height);
+  body.append("subtitles", $("subtitles").checked ? "true" : "false");
   $("generateButton").disabled = true;
   state.startedAt = Date.now();
   try {

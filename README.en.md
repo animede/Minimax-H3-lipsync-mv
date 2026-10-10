@@ -54,6 +54,19 @@ For vertical and square output, a composition instruction that centers the subje
 added to each scene prompt automatically. Without it, a scene composed for landscape can
 push the subject to the edge of a vertical frame.
 
+## Captions (narration videos)
+
+Narration videos get captions burned in at the bottom of the frame, one per script
+sentence ("Show captions", on by default). The timing comes from synthesizing the
+narration one sentence at a time, so captions stay in sync without speech recognition.
+
+- Long sentences are split at punctuation, spaces and hiragana-to-kanji boundaries into
+  display units of at most two lines
+- In vertical video, captions sit a little higher so they do not overlap the controls of
+  apps such as TikTok
+- The same captions can be downloaded as an SRT file (to upload as a subtitle track)
+- Not used for music videos, because the lyrics are unknown
+
 ## GPU and speed
 
 With `H3_PRESET=auto` (the default), the H3 configuration is chosen from the VRAM of the
@@ -163,6 +176,7 @@ are regenerated rather than reused by mistake.
 - `POST /api/jobs/{id}/cancel` — request cancellation
 - `GET /api/jobs/{id}/output` — inline playback
 - `GET /api/jobs/{id}/download` — download
+- `GET /api/jobs/{id}/subtitles.srt` — download the captions as SRT (narration videos)
 - `GET /api/health` — LLM connectivity check
 - `GET /api/h3/capacity` — estimated pixel budget for this GPU
 
