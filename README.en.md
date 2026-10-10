@@ -46,16 +46,9 @@ platform's aspect ratio.
 | Square (Instagram / X 1:1) | 960×960 | 768×768 | 576×576 |
 | Classic (4:3 / 3:4) | 1024×768 | 768×576 | 512×384 |
 
-Official standard sizes are also available (the quality selector is disabled for them).
-
-| Official size | Sizes | Source |
-|---|---|---|
-| H3 official | 1344×768 / 768×1344 / 768×768 | Short edge 768, up to 768×1344 pixels (defaults of the diffusers H3 implementation) |
-| LTX-2.5 official | 960×544 / 544×960 | Stage-1 size in the official model card |
-
-LTX-2.5's final official output is 1920×1088, twice the stage-1 size, but generating that
-size directly with H3 does not fit a 48 GB-class GPU, so the stage-1 size 960×544 is
-offered instead.
+H3's official standard sizes are also available (the quality selector is disabled for
+them): 1344×768 / 768×1344 / 768×768, following H3's short edge of 768 and maximum of
+768×1344 pixels (defaults of the diffusers H3 implementation).
 
 For vertical and square output, a composition instruction that centers the subject is
 added to each scene prompt automatically. Without it, a scene composed for landscape can

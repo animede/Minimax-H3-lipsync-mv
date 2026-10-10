@@ -340,14 +340,11 @@ const VIDEO_SIZE_TABLE = {
   square:    { hq: "960x960",  std: "768x768",  fast: "576x576" },
   classic:   { hq: "1024x768", std: "768x576",  fast: "512x384" },
   classic_v: { hq: "768x1024", std: "576x768",  fast: "384x512" },
-  // 公式標準サイズ(画質の選択は無効)。H3 は短辺 768・最大 768×1344 画素
-  // (diffusers の canvas_short_edge / canvas_max_pixels 既定値)。LTX-2.5 は公式モデル
-  // カードの 1 段目 960×544(2 段目で 1920×1088 にするが、H3 では 48GB に載らない)。
+  // H3 公式標準サイズ(画質の選択は無効)。短辺 768・最大 768×1344 画素
+  // (diffusers の canvas_short_edge / canvas_max_pixels 既定値)。
   h3_land:   { fixed: "1344x768" },
   h3_port:   { fixed: "768x1344" },
   h3_square: { fixed: "768x768" },
-  ltx_land:  { fixed: "960x544" },
-  ltx_port:  { fixed: "544x960" },
 };
 // この GPU で 10 秒シーンが収まる画素数の目安(/api/h3/capacity、null = 制限なし)。
 let gpuCapacity = { max_pixels: null, gpu_gb: null };
