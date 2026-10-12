@@ -16,7 +16,7 @@ from .config import ROOT, settings
 from .job_store import store
 from .pipeline import run_pipeline
 from .services.h3 import H3Client
-from .services.llm import LLMError, check_models
+from .services.llm import BACKGROUND_TEXT_MODES, LLMError, check_models
 from .services.tts import TTSError, check_tts, read_text_file
 
 app = FastAPI(title="Minimax-H3-lipsync-mv", version="0.1.0")
@@ -105,6 +105,7 @@ async def create_job(
     width: Annotated[int, Form()] = settings.width,
     height: Annotated[int, Form()] = settings.height,
     subtitles: Annotated[bool, Form()] = True,
+    background_text: Annotated[str, Form()] = "auto",
 ) -> dict:
     character_type = (character.content_type or mimetypes.guess_type(character.filename or "")[0] or "")
     if character_type not in IMAGE_TYPES:
@@ -113,6 +114,8 @@ async def create_job(
         raise HTTPException(422, "楽曲またはテキストのどちらか一方を指定してください")
     if (width, height) not in VIDEO_SIZES:
         raise HTTPException(422, "対応していない動画サイズです")
+    if background_text not in BACKGROUND_TEXT_MODES:
+        raise HTTPException(422, "背景の文字の指定が不正です")
     image_name = _safe_filename(character.filename or "character.png", "character")
     input_mode = "narration" if text is not None else "music"
     source_text = ""
@@ -131,6 +134,7 @@ async def create_job(
     job = store.create(
         image_name, song_name, concept, input_mode=input_mode, text_file=text_name,
         width=width, height=height, subtitles=subtitles,
+        background_text=background_text,
     )
     input_dir = store.job_dir(job.id) / "input"
     try:

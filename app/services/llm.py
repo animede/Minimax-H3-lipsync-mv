@@ -235,6 +235,22 @@ _FRAME_LLM_GUIDANCE = {
     "landscape": "",
 }
 
+# 背景の文字の扱い(UI で選択)。動画モデルは大きな短い文字は描けるが、小さな文章は崩れる。
+BACKGROUND_TEXT_MODES = ("auto", "large", "none")
+_BACKGROUND_TEXT_GUIDANCE = {
+    "auto": "",
+    "large": (
+        "Background text rule: any readable text in the scene (signs, titles, logos, headings, "
+        "screens) must be LARGE and SHORT, one to three words, clearly legible. Render small or "
+        "dense text (book pages, documents, labels, paragraphs on screens or boards) as abstract "
+        "shapes, lines, icons or diagrams instead of letters. "
+    ),
+    "none": (
+        "Background text rule: the scene contains no readable letters or words. Signs, screens, "
+        "boards, books and labels show only shapes, colors, icons, diagrams or pictures. "
+    ),
+}
+
 # [Shot 1] の冒頭に置く構図文。H3 は文頭の指示が最も効く(2026-10-08 実測、固定カメラ句の
 # 配置 A/B)。横長は LLM の構図に任せる。
 _FRAME_SHOT_PREFIX = {
@@ -373,6 +389,7 @@ def generate_scenario(
     concept: str,
     character: dict[str, Any],
     *, source_text: str = "", frame: str = "landscape",
+    background_text: str = "auto",
 ) -> dict[str, Any]:
     narration_instruction = (
         "This is a spoken narration video, not a music video. Build the visual story directly from "
@@ -414,6 +431,7 @@ def generate_scenario(
             "singing scene. For lower vocal_ratio explicitly describe a closed relaxed mouth. "
             "Use restrained camera motion and avoid cuts inside a generated clip.\n"
             + _FRAME_LLM_GUIDANCE.get(frame, "")
+            + _BACKGROUND_TEXT_GUIDANCE.get(background_text, "")
             + narration_instruction
             +
             f"CHARACTER_REFERENCE_FACTS: {json.dumps(character, ensure_ascii=False)}\n"

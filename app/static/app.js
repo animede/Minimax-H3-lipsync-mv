@@ -306,6 +306,7 @@ async function generate() {
   body.append("width", width);
   body.append("height", height);
   body.append("subtitles", $("subtitles").checked ? "true" : "false");
+  body.append("background_text", $("backgroundText").value);
   $("generateButton").disabled = true;
   state.startedAt = Date.now();
   try {

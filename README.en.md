@@ -54,6 +54,14 @@ For vertical and square output, a composition instruction that centers the subje
 added to each scene prompt automatically. Without it, a scene composed for landscape can
 push the subject to the edge of a vertical frame.
 
+## Background text
+
+Video models draw large, short text (signs, headings) well, but small dense text (book pages, documents, fine screen text) tends to break up. "Background text" chooses how the scenario handles it:
+
+- **Auto** (default): no instruction; the LLM scenario decides
+- **Large text only**: readable text is limited to one to three large words; dense text is drawn as shapes, diagrams or icons instead
+- **No text**: no readable text in the background
+
 ## Captions (narration videos)
 
 Narration videos get captions burned in at the bottom of the frame, one per script

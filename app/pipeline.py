@@ -127,6 +127,7 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
             scenes, job.concept, character,
             source_text=job.source_text if job.input_mode == "narration" else "",
             frame=frame_kind(job.width, job.height),
+            background_text=job.background_text,
         )
         prompt_by_index = {
             int(item["index"]): item for item in scenario.get("scenes", [])
