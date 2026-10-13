@@ -96,7 +96,8 @@ textarea:focus { border-color: var(--accent); }
 .video-open { display: block; width: 100%; padding: 0; border: 1px solid var(--line); background: #050607; border-radius: 12px; overflow: hidden; color: var(--text); position: relative; }
 .video-open video { display: block; width: 100%; aspect-ratio: 4/3; }
 .video-open > button { position: absolute; right: 10px; top: 10px; background: #080a0cdd; color: var(--text); border: 1px solid #3d464e; border-radius: 6px; padding: 6px 9px; font-size: 11px; cursor: zoom-in; }
-.download-button { width: 100%; margin-top: 10px; color: #101500; background: var(--accent); }
+.download-row { display: flex; gap: 9px; margin-top: 10px; }
+.download-button { flex: 1; color: #101500; background: var(--accent); }
 .log-panel { margin-top: 20px; border: 1px solid var(--line); border-radius: 10px; background: #0b0e11; }
 .log-panel summary { padding: 11px 13px; cursor: pointer; color: #bac2c9; font-size: 12px; }
 .log-panel pre { max-height: 210px; overflow: auto; margin: 0; padding: 0 13px 13px; color: #89959f; font: 11px/1.6 ui-monospace, monospace; white-space: pre-wrap; }
