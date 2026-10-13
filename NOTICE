@@ -1,0 +1,8 @@
+Minimax-H3-lipsync-mv
+Copyright 2026 YUZUKI
+
+Licensed under the Apache License, Version 2.0.
+
+This product is a client application for the MiniMax-H3 model. Model weights
+are not included; MiniMax-H3 weights are licensed separately under the
+MiniMax H3 Community License Agreement by MiniMax AI.

@@ -1,3 +1,6 @@
+// Copyright 2026 YUZUKI
+// SPDX-License-Identifier: Apache-2.0
+
 const state = { image: null, sourceFile: null, sourceMode: null, job: null, source: null, startedAt: 0 };
 const $ = (id) => document.getElementById(id);
 

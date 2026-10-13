@@ -187,6 +187,8 @@ H3 gatewayにはジョブ途中キャンセルAPIがないため、キャンセ�
 
 本リポジトリのソースコードは[Apache License 2.0](LICENSE)で提供します。
 
+Copyright 2026 YUZUKI（著作権表示・[NOTICE](NOTICE)の内容は、第4条に基づき再配布時も保持してください）。
+
 このライセンスは本リポジトリのソースコードにのみ適用されます。MiniMax-H3のモデル重みは
 [MiniMax H3 Community License Agreement](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE)
 に従い、その他のモデル、LoRA、ライブラリなどの依存コンポーネントには各配布元の

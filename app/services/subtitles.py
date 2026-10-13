@@ -1,3 +1,6 @@
+# Copyright 2026 YUZUKI
+# SPDX-License-Identifier: Apache-2.0
+
 """読み上げ動画のテロップ(焼き込み用 ASS と、アップロード用 SRT)を作る。
 
 入力は TTS が 1 文ずつ合成したときの文タイミング(analysis/sentence_timings.json)。

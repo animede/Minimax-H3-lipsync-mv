@@ -98,6 +98,11 @@ textarea:focus { border-color: var(--accent); }
 .video-open > button { position: absolute; right: 10px; top: 10px; background: #080a0cdd; color: var(--text); border: 1px solid #3d464e; border-radius: 6px; padding: 6px 9px; font-size: 11px; cursor: zoom-in; }
 .download-row { display: flex; gap: 9px; margin-top: 10px; }
 .download-button { flex: 1; color: #101500; background: var(--accent); }
+.app-footer { max-width: 1500px; margin: auto; padding: 6px 36px 26px; border-top: 1px solid var(--line); color: #78828b; font-size: 11px; line-height: 1.8; }
+.app-footer a { color: #9fb3a6; text-decoration: none; }
+.app-footer a:hover { text-decoration: underline; }
+.footer-sep { margin: 0 6px; color: #3d464e; }
+.footer-note { margin: 2px 0 0; color: #5d666e; }
 .log-panel { margin-top: 20px; border: 1px solid var(--line); border-radius: 10px; background: #0b0e11; }
 .log-panel summary { padding: 11px 13px; cursor: pointer; color: #bac2c9; font-size: 12px; }
 .log-panel pre { max-height: 210px; overflow: auto; margin: 0; padding: 0 13px 13px; color: #89959f; font: 11px/1.6 ui-monospace, monospace; white-space: pre-wrap; }
