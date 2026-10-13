@@ -54,8 +54,27 @@ def check_tts(timeout: float = 5) -> dict[str, Any]:
         raise TTSError(f"AivisSpeech Engineに接続できません: {exc}") from exc
 
 
-def _synthesize_sentence(sentence: str) -> bytes:
-    params = {"text": sentence, "speaker": settings.tts_speaker_id}
+def list_speakers(timeout: float = 5) -> list[dict[str, Any]]:
+    """AivisSpeech の話者一覧を UI のプルダウン用に平坦化する(1スタイル=1項目)。"""
+    try:
+        response = requests.get(f"{settings.tts_url}/speakers", timeout=timeout)
+        response.raise_for_status()
+        speakers = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise TTSError(f"AivisSpeech Engineに接続できません: {exc}") from exc
+    options: list[dict[str, Any]] = []
+    for speaker in speakers:
+        styles = speaker.get("styles") or []
+        for style in styles:
+            name = str(speaker.get("name") or "不明な話者")
+            if len(styles) > 1:
+                name = f"{name}({style.get('name')})"
+            options.append({"id": style.get("id"), "name": name})
+    return options
+
+
+def _synthesize_sentence(sentence: str, speaker_id: int) -> bytes:
+    params = {"text": sentence, "speaker": speaker_id}
     try:
         query = requests.post(
             f"{settings.tts_url}/audio_query", params=params, timeout=60
@@ -63,7 +82,7 @@ def _synthesize_sentence(sentence: str) -> bytes:
         query.raise_for_status()
         synthesis = requests.post(
             f"{settings.tts_url}/synthesis",
-            params={"speaker": settings.tts_speaker_id},
+            params={"speaker": speaker_id},
             json=query.json(),
             timeout=180,
         )
@@ -73,7 +92,10 @@ def _synthesize_sentence(sentence: str) -> bytes:
         raise TTSError(f"AivisSpeechの音声合成に失敗しました: {exc}") from exc
 
 
-def synthesize_text(text: str, destination: Path) -> list[dict[str, Any]]:
+def synthesize_text(
+    text: str, destination: Path, speaker_id: int = 0
+) -> list[dict[str, Any]]:
+    speaker_id = speaker_id or settings.tts_speaker_id
     sentences = split_sentences(text)
     destination.parent.mkdir(parents=True, exist_ok=True)
     pcm_parts: list[bytes] = []
@@ -82,7 +104,7 @@ def synthesize_text(text: str, destination: Path) -> list[dict[str, Any]]:
     elapsed = 0.0
     for index, sentence in enumerate(sentences, start=1):
         try:
-            with wave.open(io.BytesIO(_synthesize_sentence(sentence)), "rb") as source:
+            with wave.open(io.BytesIO(_synthesize_sentence(sentence, speaker_id)), "rb") as source:
                 current = (source.getnchannels(), source.getsampwidth(), source.getframerate())
                 if params is None:
                     params = current

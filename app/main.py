@@ -17,7 +17,7 @@ from .job_store import store
 from .pipeline import run_pipeline
 from .services.h3 import H3Client
 from .services.llm import BACKGROUND_TEXT_MODES, LLMError, check_models
-from .services.tts import TTSError, check_tts, read_text_file
+from .services.tts import TTSError, check_tts, list_speakers, read_text_file
 
 app = FastAPI(title="Minimax-H3-lipsync-mv", version="0.1.0")
 app.mount("/static", StaticFiles(directory=ROOT / "app" / "static"), name="static")
@@ -74,6 +74,16 @@ def h3_capacity() -> dict:
                 "error": str(exc)}
 
 
+@app.get("/api/tts/speakers")
+def tts_speakers() -> dict:
+    """AivisSpeech の話者一覧(UI のプルダウン用)。"""
+    try:
+        return {"ok": True, "default_id": settings.tts_speaker_id, "speakers": list_speakers()}
+    except TTSError as exc:
+        return {"ok": False, "default_id": settings.tts_speaker_id, "speakers": [],
+                "error": str(exc)}
+
+
 @app.get("/api/health")
 def health() -> dict:
     result = {"ok": True, "h3_gateway": settings.h3_gateway_url, "llms": {}, "tts": {}}
@@ -106,6 +116,7 @@ async def create_job(
     height: Annotated[int, Form()] = settings.height,
     subtitles: Annotated[bool, Form()] = True,
     background_text: Annotated[str, Form()] = "auto",
+    tts_speaker_id: Annotated[int, Form()] = 0,
 ) -> dict:
     character_type = (character.content_type or mimetypes.guess_type(character.filename or "")[0] or "")
     if character_type not in IMAGE_TYPES:
@@ -135,6 +146,7 @@ async def create_job(
         image_name, song_name, concept, input_mode=input_mode, text_file=text_name,
         width=width, height=height, subtitles=subtitles,
         background_text=background_text,
+        tts_speaker_id=max(0, tts_speaker_id),
     )
     input_dir = store.job_dir(job.id) / "input"
     try:

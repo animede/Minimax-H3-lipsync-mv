@@ -307,6 +307,7 @@ async function generate() {
   body.append("height", height);
   body.append("subtitles", $("subtitles").checked ? "true" : "false");
   body.append("background_text", $("backgroundText").value);
+  body.append("tts_speaker_id", $("ttsSpeaker").value);
   $("generateButton").disabled = true;
   state.startedAt = Date.now();
   try {
@@ -319,6 +320,32 @@ async function generate() {
     $("formError").textContent = error.message;
     updateGenerateState();
   }
+}
+
+async function loadSpeakers() {
+  try {
+    const response = await fetch("/api/tts/speakers");
+    const data = await response.json();
+    if (!data.ok || !data.speakers.length) return;
+    const select = $("ttsSpeaker");
+    select.innerHTML = "";
+    // 既定IDが一覧に無い(モデル入れ替え後など)場合は「既定の話者」を残し、
+    // 先頭の話者へ黙ってフォールバックしない
+    if (!data.speakers.some((speaker) => speaker.id === data.default_id)) {
+      const fallback = document.createElement("option");
+      fallback.value = "0";
+      fallback.textContent = "既定の話者";
+      fallback.selected = true;
+      select.appendChild(fallback);
+    }
+    for (const speaker of data.speakers) {
+      const option = document.createElement("option");
+      option.value = speaker.id;
+      option.textContent = speaker.name + (speaker.id === data.default_id ? "(既定)" : "");
+      if (speaker.id === data.default_id) option.selected = true;
+      select.appendChild(option);
+    }
+  } catch { /* 一覧が取れないときは「既定の話者」のまま送る(サーバ側の既定を使用) */ }
 }
 
 async function checkHealth() {
@@ -404,6 +431,7 @@ setInterval(() => {
   }
 }, 1000);
 checkHealth();
+loadSpeakers();
 
 // ---------------- 生成履歴(リロード/再起動後も過去ジョブへ辿れる) ----------------
 function historyLabel(job) {

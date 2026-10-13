@@ -75,7 +75,7 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
         ensure_media_tools()
         if job.input_mode == "narration":
             _stage(job_id, jobs, "synthesizing", 0.02, "AivisSpeechで文ごとに音声を合成しています")
-            sentence_timings = synthesize_text(job.source_text, song)
+            sentence_timings = synthesize_text(job.source_text, song, job.tts_speaker_id)
             (analysis_dir / "sentence_timings.json").write_text(
                 json.dumps(sentence_timings, ensure_ascii=False, indent=2), encoding="utf-8"
             )

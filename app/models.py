@@ -43,6 +43,8 @@ class Job:
     subtitle_file: str = ""
     # 背景の文字: auto(指定なし)/ large(大きな短い文字のみ)/ none(文字なし)。
     background_text: str = "auto"
+    # AivisSpeech の話者(スタイル)ID。0 は既定(TTS_SPEAKER_ID)を使う。読み上げ時のみ有効。
+    tts_speaker_id: int = 0
     duration: float = 0.0
     current_scene: int = 0
     scene_count: int = 0
