@@ -35,10 +35,12 @@ class H3Client:
         return response
 
     # MV 本番の既定。単独運用ではこれだけを渡す(テキストエンコーダは 32B のまま)。
+    # turbo LoRA は指定しない = H3 側の既定(ref2v v1.0 を 4steps)を使う。2026-10-19 まで
+    # ref2v v0.1 4step を明示していたが、H3 は 2026-09-09 の A/B(v0.1 はオーバーアクション、
+    # v1.0 は同コストで品質上)でフリート既定を v1.0 に切り替え済みだった。
     BASE_OVERRIDES = {
         "H3_REF_PREFIX_CACHE_SINGLE": "1",
         "H3_VOCAL_LOCK": "1",
-        "H3_TURBO_LORA_FILE": "minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors",
     }
 
     # 同居(coresident)のときだけ使うプリセット。
@@ -200,6 +202,32 @@ class H3Client:
         data["text_encoder"] = "qwen3-vl-32b"  # 同居時も 32B のまま
         data["decode_gpu"] = decode_gpu
         return data
+
+    def conversation_quiet_wait_s(self) -> float:
+        """会話が静かになるまでの残り秒(0 なら進んでよい)。
+
+        gateway のリアルタイムリースは会話アプリがターンごとに取る。保持中、または
+        最後のリース終了から `h3_conversation_quiet_s` 秒以内なら会話中とみなす。
+        ここで H3 をロードすると会話用の H3 が設定違いで再起動され、シーン投入は
+        会話のチャンクを数分待たせるため。古い gateway(last_ended_at 無し)や
+        取得失敗時は待たない。
+        """
+        quiet = settings.h3_conversation_quiet_s
+        if quiet <= 0:
+            return 0.0
+        try:
+            response = self._request("GET", "/api/v1/realtime/lease", timeout=15)
+        except H3Error:
+            return 0.0
+        if not response.ok:
+            return 0.0
+        data = response.json()
+        if data.get("lease"):
+            return quiet
+        last = data.get("last_ended_at")
+        if last is None:
+            return 0.0
+        return max(0.0, quiet - (time.time() - float(last)))
 
     def status(self) -> dict[str, Any]:
         response = self._request("GET", "/api/v1/status", timeout=15)

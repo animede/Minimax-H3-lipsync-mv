@@ -51,6 +51,10 @@ class Settings:
     # 明示値はそのまま使う。
     h3_preset: str = os.getenv("H3_PRESET", "auto")
     h3_gpus: str = os.getenv("H3_GPUS", "0")
+    # 会話アプリ(r-n-v)が H3/LTX を使っている間は H3 のロードとシーン投入を待つ。
+    # gateway のリアルタイムリースはターン単位なので、最後のリース終了からこの秒数
+    # 静かになるまで「会話中」とみなす。0 で無効(待たない)。
+    h3_conversation_quiet_s: float = float(os.getenv("H3_CONVERSATION_QUIET_S", "60"))
     # 2枚目の GPU で decode を並行させる(連続生成の間隔短縮)。"auto" = 2枚目があれば
     # 使う / "off" = 使わない / 数字 = その GPU を使う。96GB 級プリセットでは使わない。
     h3_decode_gpu: str = os.getenv("H3_DECODE_GPU", "auto").strip()

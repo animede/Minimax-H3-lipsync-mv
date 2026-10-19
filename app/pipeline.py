@@ -58,6 +58,20 @@ def _stage(
     jobs.log(job_id, message)
 
 
+def _wait_for_conversation(job_id: str, jobs: JobStore, h3: H3Client) -> bool:
+    """会話アプリが H3/LTX を使っている間は待つ。待ったら True。"""
+    waited = False
+    while (remaining := h3.conversation_quiet_wait_s()) > 0:
+        _check_cancel(job_id, jobs)
+        if not waited:
+            message = "会話アプリが使用中のため、会話が終わるまで待機しています"
+            jobs.update(job_id, message=message)
+            jobs.log(job_id, message)
+            waited = True
+        time.sleep(min(remaining, 5.0))
+    return waited
+
+
 def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
     job = jobs.get(job_id)
     if job is None:
@@ -149,6 +163,7 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
 
         _stage(job_id, jobs, "loading_h3", 0.26, "MiniMax-H3を常駐構成で準備しています")
         h3 = H3Client()
+        _wait_for_conversation(job_id, jobs, h3)
         loaded = h3.ensure_loaded()
         if loaded.get("coresident"):
             # 同居時はプリセットが変わり1シーンあたり十数秒遅くなる。テキスト
@@ -269,6 +284,11 @@ def run_pipeline(job_id: str, jobs: JobStore = store) -> None:
                 current_scene=position,
             )
             jobs.log(job_id, f"シーン{position}: {scene['start']:.2f}–{scene['end']:.2f}秒")
+            if _wait_for_conversation(job_id, jobs, h3):
+                # 待っている間に会話側が H3 を自分の構成で載せ直している可能性がある
+                # (同一構成なら no-op)。
+                h3.ensure_loaded()
+                jobs.update(job_id, message=f"H3でシーン {position} / {count} を生成しています")
             try:
                 submitted = h3.submit_scene(
                     image_asset_id=image_asset_id,
