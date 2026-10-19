@@ -35,12 +35,15 @@ class H3Client:
         return response
 
     # MV 本番の既定。単独運用ではこれだけを渡す(テキストエンコーダは 32B のまま)。
-    # turbo LoRA は指定しない = H3 側の既定(ref2v v1.0 を 4steps)を使う。2026-10-19 まで
-    # ref2v v0.1 4step を明示していたが、H3 は 2026-09-09 の A/B(v0.1 はオーバーアクション、
-    # v1.0 は同コストで品質上)でフリート既定を v1.0 に切り替え済みだった。
+    # turbo LoRA は ref2v v0.1 4step を明示する(H3 側のフリート既定 v1.0 は使わない)。
+    # 2026-10-19 に v1.0 へ切り替えたところ、1024×576・約9秒のシーンで人物の横に
+    # 図形やロゴを置く構図のとき人物が複製された(同一 seed・参照・音声の A/B で v1.0 のみ
+    # 再現、v0.1 は同じプロンプトでも単独のまま)。プロンプトから「半透明」等の語を
+    # 除いても複製は残ったため v0.1 に戻した。v0.1 はややオーバーアクション気味。
     BASE_OVERRIDES = {
         "H3_REF_PREFIX_CACHE_SINGLE": "1",
         "H3_VOCAL_LOCK": "1",
+        "H3_TURBO_LORA_FILE": "minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors",
     }
 
     # 同居(coresident)のときだけ使うプリセット。
