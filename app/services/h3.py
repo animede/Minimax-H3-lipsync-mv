@@ -57,6 +57,12 @@ class H3Client:
     # 細部を指定する品質重視のバッチ用途なので、投影TE の近似(PSNR 22.64dB / 鮮鋭度 -23%、
     # 「大意は保持し細部は失う」)を受け入れる理由がない。
     CORESIDENT_PRESET = "48gb-lowvram"
+    # 2026-10-19: 同居時は transformer を int8 にする。`48gb-lowvram` の既定は bf16 で
+    # HF から bf16 重み(transformer / transformer_ref 各 ~66GB)を読むが、bf16 シャードは
+    # キャッシュから削除済みのため、そのままでは最大 133GB の再DL(H3 側ガードがあれば
+    # エラー)になる。int8 なら単独用 `96gb-int8` と同じ量子化済みキャッシュ
+    # (models/prequant/transformer*_int8)を読むので DL 不要、重みも単独時と同一になる。
+    CORESIDENT_OVERRIDES = {"H3_TRANSFORMER_QUANT": "int8"}
 
     # 96GB 級未満の GPU 用の既定プリセット(ck-w4a8 pruned + pinned 系)。
     # 2026-10-10 実測(RTX PRO 5000 48GB、1024×768・10.1s・243f・turbo):
@@ -162,6 +168,8 @@ class H3Client:
         preset = self.CORESIDENT_PRESET if coresident else self._resolve_preset()
         gpus = settings.h3_gpus
         overrides = dict(self.BASE_OVERRIDES)
+        if coresident:
+            overrides.update(self.CORESIDENT_OVERRIDES)
         decode_gpu = self._decode_gpu() if preset in self.SMALL_GPU_PRESETS else None
         if decode_gpu is not None:
             # 計算 GPU を先頭、decode GPU を 2 枚目にして可視化し、cuda:1 で decode させる。
