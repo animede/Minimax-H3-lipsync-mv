@@ -35,15 +35,18 @@ class H3Client:
         return response
 
     # MV 本番の既定。単独運用ではこれだけを渡す(テキストエンコーダは 32B のまま)。
-    # turbo LoRA は ref2v v0.1 4step を明示する(H3 側のフリート既定 v1.0 は使わない)。
-    # 2026-10-19 に v1.0 へ切り替えたところ、1024×576・約9秒のシーンで人物の横に
-    # 図形やロゴを置く構図のとき人物が複製された(同一 seed・参照・音声の A/B で v1.0 のみ
-    # 再現、v0.1 は同じプロンプトでも単独のまま)。プロンプトから「半透明」等の語を
-    # 除いても複製は残ったため v0.1 に戻した。v0.1 はややオーバーアクション気味。
+    # turbo LoRA は lightx2v が 2026-10-20 に公開した ref2v 4step 専用 v1.0 を明示する。
+    # 経緯: 2026-10-19 に旧 v1.0(実体は 8step 用 v1.0 を 4steps で使用)へ切り替えたところ、
+    # 1024×576・約9秒のシーンで人物の横に図形やロゴを置く構図のとき人物が複製されたため
+    # v0.1 に戻していた。10-21〜22 に別マシンで A/B(紋章・ホログラム構図の語り、歌唱、
+    # 計 30 本超、seed 固定)を行い、4step v1.0 は複製なし・寄り/立ち位置の指示どおり・
+    # 表情も自然で、v0.1 のオーバーアクション(頭の動き約 1.4 倍)も解消、速度は同じだった。
+    # 10-19 に複製が出た素材そのものでの再確認はしていない。再発したら
+    # "minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors" に戻して同一 seed で比べること。
     BASE_OVERRIDES = {
         "H3_REF_PREFIX_CACHE_SINGLE": "1",
         "H3_VOCAL_LOCK": "1",
-        "H3_TURBO_LORA_FILE": "minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors",
+        "H3_TURBO_LORA_FILE": "minimax_h3_ref2v_turbo_4step_v1.0_768p_bf16.safetensors",
     }
 
     # 同居(coresident)のときだけ使うプリセット。
